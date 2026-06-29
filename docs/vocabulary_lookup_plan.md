@@ -6,6 +6,8 @@
 
 正确方向是：以这本书的句子为中心，先生成“书内单词本”，阅读时再通过点击查词、朗读和标记掌握状态不断修正它。词典只是辅助数据，书里的中英文对照才是第一解释来源。
 
+2026-06-29 更新：Life-study/生命读经这类领域词库不能按“抽取到候选词就入库”的方式做。Genesis 中英对照 PDF 前 20 页探针已经证明版面抽取可行，但也暴露出候选噪音和低匹配率问题。因此领域词库必须先经过准确率门控：抽取、对齐、候选生成、评分、A/B/C/D 分级、审核报告、A/B 级受控入库。当前 Genesis 前 50 页和 Genesis 全书已通过规则门控；25 条 A/B 词条已写入隔离的 `reader.domain_glossary_entries` staging 表，并只在 Life-study/生命读经书籍上下文启用。`1-01创世记生命读经.epub` 也已导入 Sentence Reader，25 条 A/B 已写入该书的 `book_glossary` / `book_vocab_items`。详细施工方案见 `docs/lifestudy_vocab_pipeline_plan.md`。
+
 ## 目标
 
 1. 打开一本英文或中英对照 EPUB 后，自动生成这本书的候选单词本。
@@ -25,6 +27,8 @@
 
 - 查词卡片第一屏只显示一个核心解释：本句义。
 - 本句义优先来自当前书的中文对照句，而不是外部词典的长解释。
+- Life-study 领域释义只能来自中英对照证据或用户修正，不能由模型脑补。
+- 只有 A/B 级领域词条可以进入前台 lookup；C/D 级只能进入审核或丢弃。
 - 单词必须绑定英文句子和中文句子，否则复习价值很低。
 - 用户修正过的解释优先级最高。
 - 朗读使用 macOS 本地语音即可，先不做云端 TTS。
@@ -35,6 +39,9 @@
 - 不做大而全的词典软件。
 - 不把一个单词的十几个中文释义全摊出来。
 - 不默认把全书每个生词都推给用户。
+- 不全量跑 Life-study 全套书后直接入库。
+- 不把 `god`, `life`, `word`, `earth` 这类普通高频词自动当作领域词条。
+- 不把 Life-study 语境释义污染到通用词典表。
 - 不在阅读正文里塞大段 AI 解释。
 - 不一开始做复杂背单词游戏。
 
@@ -102,6 +109,34 @@ flowchart TD
     I --> G
 ```
 
+## Life-study 领域词库门控流程
+
+普通书内单词本可以从当前 EPUB 生成候选；Life-study 领域词库必须更严格，因为它会影响英文查词的第一解释。
+
+```mermaid
+flowchart TD
+    A["中英对照 PDF"] --> B["坐标列抽取"]
+    B --> C["OpenCC 简体化"]
+    C --> D["页眉页脚噪音过滤"]
+    D --> E["句子/短块对齐"]
+    E --> F["候选词和词组抽取"]
+    F --> G["上下文中文释义匹配"]
+    G --> H["A/B/C/D 分级"]
+    H --> I["审核报告"]
+    H --> J["A/B 级受控入库"]
+```
+
+分级规则：
+
+| 等级 | 含义 | 是否可进入前台 |
+| --- | --- | --- |
+| A | 有强中英对照证据，中文表达清楚 | 可以 |
+| B | 有较好证据，但存在轻微规范化或形态差异 | 可以，需保留来源和置信度 |
+| C | 可能有价值，但需要人工确认 | 不可以 |
+| D | 噪音、碎片、误切词 | 不可以 |
+
+当前严禁：把 `god god`、`earth earth`、`says god`、页眉标题、普通高频单词直接写入正式词库。
+
 ## 词条筛选规则
 
 不能把 every, this, from, have 这种词大量塞进单词本。候选词至少要经过一层筛选。
@@ -131,6 +166,15 @@ flowchart TD
 4. 同一本书里相同短语的已确认解释。
 5. ECDICT / WordNet 等外部词典的短释义。
 6. 更多释义折叠在“更多”里，不进入第一屏。
+
+2026-06-29 当前查词顺序实现：
+
+1. 用户手动修正。
+2. 当前书 `reader.book_glossary` / `reader.book_vocab_items`。
+3. 如果当前书标题、hash 或文件路径明确包含 Life-study/生命读经标记，则查询 `reader.domain_glossary_entries` 中 A/B 且 active 的 Life-study 词条。
+4. 通用本地词典 `reader.dictionary_entries`。
+
+这条边界是故意收紧的：Life-study 语境词义不能污染普通英文书，也不能进入通用词典。
 
 示例：
 
@@ -573,6 +617,72 @@ economy
 6. 用户可以修正本句义，修正结果只影响当前书。
 
 这个版本如果做扎实，比一开始接入十个词库更有价值。
+
+## Life-study Context Vocabulary Update
+
+2026-06-29 已完成 Life-study Genesis 的受控词库流水线第一轮落地，并增加 no-write stage gate、单词审校包、全量词频与中文上下文报告、词组与非常用词组合审校文档。
+
+已经完成：
+
+- `scripts/lifestudy_context_vocab_pipeline.py`：正式 V1 提纯流水线。
+- OpenCC `t2s` 简繁转换。
+- 页眉、页脚、页码、重复标题过滤。
+- 中英短块对齐，并输出 alignment confidence。
+- A/B/C/D 分级。
+- C/D 不进入 importable 文件。
+- Genesis 前 50 页审核包。
+- Genesis 全书 1,255 页审核包。
+- `scripts/lifestudy_context_vocab_import.py`：受控导入工具，默认 dry-run，必须 `--apply` 才写库。
+- Mac 端选中英文短语后保留完整短语，不再只取第一个单词。
+- Reader API 支持短语 lookup，例如 `tree of life`、`God-breathed`。
+- `1-01创世记生命读经.epub` 已导入为 `book_e0679064039e4e298e9faf3127b65876`。
+- 25 条 A/B 已写入该书的 `reader.book_glossary` 和 `reader.book_vocab_items`。
+- 导入脚本已加保护：如果已有 `source='user'` 的人工释义，重复导入不会覆盖它。
+- `scripts/lifestudy_context_vocab_book_lookup_smoke.py` 验证书内查词来源和通用词典隔离。
+- `scripts/lifestudy_context_vocab_review_pack.py` 生成 25 条 A/B 的人工复核包和 override 模板。
+- `scripts/lifestudy_context_vocab_review_pack_smoke.py` 验证复核包不会写数据库、不会包含 C/D、没有人工确认时不能扩下一卷。
+- `scripts/lifestudy_context_vocab_apply_review.py` 可以把审校后的 approve/correct/reject 安全回写；默认 dry-run，必须 `--apply` 才写库。
+- `scripts/lifestudy_context_vocab_apply_review_smoke.py` 验证 pending 模板会被拒绝、dry-run 不写库、reject 会阻止扩下一卷。
+- `scripts/lifestudy_context_vocab_review_ui_smoke.py` 验证 Reader API 的审校页面/API 存在、读取 25 条、pending 阶段不写库且不能扩下一卷。
+- `scripts/lifestudy_context_vocab_review_suggestions.py` 生成带证据的辅助审校建议和 assistant-suggested override，但明确标记为不是人工审校。
+- `scripts/lifestudy_context_vocab_review_suggestions_smoke.py` 验证建议稿不写库，且只作为 dry-run 参考。
+
+Genesis 全书当前指标：
+
+- A/B 可导入候选：25 条。
+- 规则门控准确率估算：0.95。
+- C/D 候选不会进入前台或正式导入包。
+- 数据库写入：已执行，仅限 domain staging 和 Genesis book-specific A/B。
+
+当前不能自动继续扩全套书的原因：
+
+- 0.95 是规则门控估算，不是人工逐条审校后的最终准确率。
+- 现在只证明 Genesis 这一本的链路跑通，不能推出 66 卷都可以无脑跑。
+- Genesis 复核包已经生成，但 25 条仍全部是 `pending`，所以 `can_expand_next_volume=false`。
+- 审校回写工具和网页审校入口已经完成，但 `reports/lifestudy_vocab_review/Genesis-review-overrides.template.json` 仍是 pending 模板。
+- 可以打开 `/lifestudy/vocab/review` 逐条保存到 `Genesis-review-overrides.reviewed.json`，也可以参考 `Genesis-review-overrides.assistant-suggested.json`。把 25 条标成 approve/correct/reject 后，先 dry-run，再显式 `--apply`；然后重新生成 review pack，确认全部审完且审后精度 >=85% 后再考虑 Exodus 或下一本，不是全量跑。
+
+下一步正确顺序：
+
+1. 对 Genesis 25 条 A/B 做人工复核，修正明显不对的 phrase map。
+2. 把修正回写到 pipeline 规则或小型人工 override 文件。
+3. 选择下一本小范围验证，例如 Exodus，不直接跑全套书。
+4. 每本仍先 dry-run：
+
+```bash
+.venv-reader-api/bin/python scripts/lifestudy_context_vocab_import.py \
+  <NEXT_BOOK_IMPORTABLE_JSON> \
+  --book-id <TARGET_BOOK_ID>
+```
+
+5. 确认无误后才允许显式执行：
+
+```bash
+.venv-reader-api/bin/python scripts/lifestudy_context_vocab_import.py \
+  <NEXT_BOOK_IMPORTABLE_JSON> \
+  --book-id <TARGET_BOOK_ID> \
+  --apply
+```
 
 ## 成功标准
 

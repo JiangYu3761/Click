@@ -14,12 +14,22 @@ IMPORT_SCRIPT = ROOT / "scripts" / "sentence_reader_import_ecdict.py"
 REQUIRED = {
     APP: [
         "def vocab_lookup_candidates",
+        "def normalize_vocab_lookup_text",
+        "def vocab_lookup_terms",
         "def find_dictionary_entry",
         "def ensure_dictionary_vocab_item",
         "dictionary_fallback",
         "selected_vocab_row(conn, book_id, vocab_id)",
         "book_vocab_items",
         "dictionary_entries",
+        "normalized_lookup",
+        "regexp_replace(lower(bvi.surface), '[^a-z]', '', 'g')",
+        "reader.domain_glossary_entries",
+        "def book_lifestudy_domain_enabled",
+        "def find_domain_glossary_entry",
+        "lifestudy_domain_glossary",
+        "lifestudy_rejected",
+        "bvi.status <> 'ignored'",
     ],
     MIGRATION: [
         "strategy",

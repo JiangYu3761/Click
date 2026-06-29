@@ -56,6 +56,11 @@ class FakeConn:
             "red_count": 1,
             "audio_note_count": 1,
             "hidden": False,
+            "library_metadata": {
+                "favorite": True,
+                "custom_category": "精读",
+                "tags": ["测试", "分类"],
+            },
         }
         self.annotation = {
             "id": "ann_library_smoke_note",
@@ -91,14 +96,28 @@ class FakeConn:
             return FakeCursor([] if self.hidden else [self.annotation])
         if "from reader.books b left join lateral" in sql and "where b.id = %s" in sql:
             return FakeCursor(self.book if params and params[0] == self.book["id"] else None)
+        if "select metadata from reader.library_state where book_id = %s" in sql:
+            return FakeCursor({"metadata": self.book.get("library_metadata") or {}})
+        if "insert into reader.library_state" in sql and "set metadata = excluded.metadata" in sql:
+            self.book["library_metadata"] = params[2]
+            return FakeCursor(
+                {
+                    "book_id": params[0],
+                    "hidden": self.hidden,
+                    "source": params[1],
+                    "metadata": params[2],
+                    "created_at": "2026-06-26T00:00:00Z",
+                    "updated_at": "2026-06-26T00:00:00Z",
+                }
+            )
         if "insert into reader.library_state" in sql:
             self.hidden = True
             return FakeCursor(
                 {
                     "book_id": params[0],
                     "hidden": True,
-                    "source": params[1],
-                    "metadata": params[2],
+                    "source": params[2],
+                    "metadata": params[3],
                     "created_at": "2026-06-26T00:00:00Z",
                     "updated_at": "2026-06-26T00:00:00Z",
                 }
@@ -139,8 +158,11 @@ def main() -> int:
             '@app.get("/api/library/books/{book_id}/cover")',
             '@app.post("/api/library/import")',
             '@app.post("/api/library/books/{book_id}/hide")',
+            '@app.post("/api/library/books/batch-organization")',
+            '@app.patch("/api/library/books/{book_id}/organization")',
             '@app.post("/api/library/books/{book_id}/reveal")',
             "sentence_reader.library_dashboard.v1",
+            "sentence_reader.library_batch_organization.v1",
             "library_v2",
             "library_page_html_v2",
             "data-library-v2",
@@ -150,6 +172,8 @@ def main() -> int:
             "notesView",
             "redView",
             "batchHide",
+            "batchFavorite",
+            "batchOrganize",
             "batchExport",
             "epub_cover_asset",
             "generated_cover_svg",
@@ -193,16 +217,23 @@ def main() -> int:
             missing_markers["/library"] = [f"status={page.status_code}"]
         else:
             for marker in [
-                "Sentence Reader Library V2",
+                "Click Reader Library",
                 "data-library-v2",
+                "Click Reader",
                 "Continue Reading",
                 "最近阅读",
                 "点击封面直接进入正文",
+                "收藏",
+                "作者",
+                "分类",
+                "自定义分类",
                 "笔记",
                 "红标",
+                "批量收藏",
+                "批量分类",
                 "批量导出",
                 "批量移出书库",
-                "搜索书名、作者、笔记、红标",
+                "搜索书名、作者、分类、标签、笔记、红标",
             ]:
                 if marker not in page.text:
                     missing_markers.setdefault("/library", []).append(marker)
@@ -221,15 +252,44 @@ def main() -> int:
                 missing_markers.setdefault("/api/library/dashboard", []).append("ui_version")
             if payload.get("summary", {}).get("book_count") != 1:
                 missing_markers.setdefault("/api/library/dashboard", []).append("book_count")
+            if payload.get("summary", {}).get("favorite_count") != 1:
+                missing_markers.setdefault("/api/library/dashboard", []).append("favorite_count")
             if payload.get("books", [{}])[0].get("counts", {}).get("notes") != 2:
                 missing_markers.setdefault("/api/library/dashboard", []).append("note_count")
             first_book = payload.get("books", [{}])[0]
+            if first_book.get("organization", {}).get("category") != "精读":
+                missing_markers.setdefault("/api/library/dashboard", []).append("organization_category")
+            if "测试" not in first_book.get("organization", {}).get("tags", []):
+                missing_markers.setdefault("/api/library/dashboard", []).append("organization_tags")
             if not first_book.get("cover", {}).get("url", "").endswith("/cover"):
                 missing_markers.setdefault("/api/library/dashboard", []).append("cover")
             if first_book.get("reading_state") != "在读":
                 missing_markers.setdefault("/api/library/dashboard", []).append("reading_state")
             if not payload.get("recent_annotations"):
                 missing_markers.setdefault("/api/library/dashboard", []).append("recent_annotations")
+            if not payload.get("favorite_books") or not payload.get("author_groups") or not payload.get("category_groups"):
+                missing_markers.setdefault("/api/library/dashboard", []).append("organization_groups")
+
+        org = client.patch(
+            "/api/library/books/book_library_smoke/organization",
+            json={"favorite": False, "custom_category": "复盘", "tags": ["标签A"]},
+        )
+        if org.status_code != 200:
+            missing_markers["/api/library/books/{book_id}/organization"] = [f"status={org.status_code}"]
+        else:
+            org_payload = org.json().get("organization", {})
+            if org_payload.get("favorite") is not False or org_payload.get("category") != "复盘" or org_payload.get("tags") != ["标签A"]:
+                missing_markers["/api/library/books/{book_id}/organization"] = ["payload"]
+        batch_org = client.post(
+            "/api/library/books/batch-organization",
+            json={"book_ids": ["book_library_smoke"], "favorite": True, "custom_category": "批量", "tags": ["批量标签"]},
+        )
+        if batch_org.status_code != 200:
+            missing_markers["/api/library/books/batch-organization"] = [f"status={batch_org.status_code}"]
+        else:
+            batch_payload = batch_org.json()
+            if batch_payload.get("affected_count") != 1 or batch_payload.get("results", [{}])[0].get("organization", {}).get("category") != "批量":
+                missing_markers["/api/library/books/batch-organization"] = ["payload"]
 
         cover = client.get("/api/library/books/book_library_smoke/cover")
         if cover.status_code != 200 or "image/" not in cover.headers.get("content-type", ""):

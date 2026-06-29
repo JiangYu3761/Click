@@ -210,9 +210,9 @@ def copy_reader_runtime() -> None:
 
 
 def ensure_app_icon() -> bool:
-    if APP_ICON.exists():
-        return True
     generator = ROOT / "scripts" / "generate_sentence_reader_icon.py"
+    if APP_ICON.exists() and generator.exists() and APP_ICON.stat().st_mtime >= generator.stat().st_mtime:
+        return True
     if not generator.exists():
         return False
     result = subprocess.run(
@@ -309,8 +309,8 @@ def main() -> int:
         "CFBundleIdentifier": "local.sentence-reader.v1.readium",
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleIconFile": APP_ICON_NAME if icon_ready else "",
-        "CFBundleName": "Sentence Reader",
-        "CFBundleDisplayName": "Sentence Reader",
+        "CFBundleName": "Click Reader",
+        "CFBundleDisplayName": "Click Reader",
         "CFBundleDocumentTypes": [
             {
                 "CFBundleTypeName": "EPUB Publication",
@@ -328,10 +328,10 @@ def main() -> int:
         "LSMinimumSystemVersion": "14.0",
         "LSApplicationCategoryType": "public.app-category.productivity",
         "NSHighResolutionCapable": True,
-        "NSDesktopFolderUsageDescription": "Sentence Reader can open EPUB files selected from Desktop.",
-        "NSDocumentsFolderUsageDescription": "Sentence Reader can open EPUB files selected from Documents.",
-        "NSMicrophoneUsageDescription": "Sentence Reader records short voice notes so they can be converted to text.",
-        "NSSpeechRecognitionUsageDescription": "Sentence Reader may use system speech recognition if local FunASR transcription is unavailable.",
+        "NSDesktopFolderUsageDescription": "Click Reader can open EPUB files selected from Desktop.",
+        "NSDocumentsFolderUsageDescription": "Click Reader can open EPUB files selected from Documents.",
+        "NSMicrophoneUsageDescription": "Click Reader records short voice notes so they can be converted to text.",
+        "NSSpeechRecognitionUsageDescription": "Click Reader can use Apple Speech to convert short voice notes to text.",
         "NSSupportsAutomaticGraphicsSwitching": True,
         "UIDeviceFamily": [2, 6],
         "UIApplicationSupportsIndirectInputEvents": True,

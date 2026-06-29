@@ -4,10 +4,45 @@ import AVFoundation
 import Speech
 import UniformTypeIdentifiers
 
+private enum SpeechTranscriptionProvider: String {
+    case appleSpeech = "apple_speech"
+    case funASR = "funasr"
+
+    static let defaultsKey = "SentenceReader.speechTranscriptionProvider.v1"
+
+    var title: String {
+        switch self {
+        case .appleSpeech: return "苹果"
+        case .funASR: return "FunASR"
+        }
+    }
+
+    static var current: SpeechTranscriptionProvider {
+        guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
+              let provider = SpeechTranscriptionProvider(rawValue: raw)
+        else {
+            return .appleSpeech
+        }
+        return provider
+    }
+
+    static func fromTitle(_ title: String?) -> SpeechTranscriptionProvider {
+        if title == SpeechTranscriptionProvider.funASR.title {
+            return .funASR
+        }
+        return .appleSpeech
+    }
+
+    static func save(_ provider: SpeechTranscriptionProvider) {
+        UserDefaults.standard.set(provider.rawValue, forKey: defaultsKey)
+    }
+}
+
 final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
     private weak var textView: NSTextView?
     private weak var statusLabel: NSTextField?
     private weak var recordButton: NSButton?
+    private weak var providerPopup: NSPopUpButton?
     private let bookID: String?
     private let readerAPI: ReaderAPIClient
     private var recorder: AVAudioRecorder?
@@ -31,10 +66,11 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
     private let funASRWorkerDefaultPath = "/Users/jiangyu/Documents/New project/src/asr/funasr_worker.py"
     private let funASRServerPort = 18081
 
-    init(textView: NSTextView, statusLabel: NSTextField, recordButton: NSButton, bookID: String?, readerAPI: ReaderAPIClient) {
+    init(textView: NSTextView, statusLabel: NSTextField, recordButton: NSButton, providerPopup: NSPopUpButton, bookID: String?, readerAPI: ReaderAPIClient) {
         self.textView = textView
         self.statusLabel = statusLabel
         self.recordButton = recordButton
+        self.providerPopup = providerPopup
         self.bookID = bookID
         self.readerAPI = readerAPI
         super.init()
@@ -55,6 +91,15 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
         appleSpeechTask = nil
     }
 
+    @objc func providerChanged(_ sender: NSPopUpButton) {
+        SpeechTranscriptionProvider.save(SpeechTranscriptionProvider.fromTitle(sender.titleOfSelectedItem))
+        updateStatus("")
+    }
+
+    private func selectedProvider() -> SpeechTranscriptionProvider {
+        SpeechTranscriptionProvider.fromTitle(providerPopup?.titleOfSelectedItem)
+    }
+
     private func requestMicrophoneAndStart() {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
         if status == .authorized {
@@ -62,7 +107,7 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
             return
         }
         if status == .denied || status == .restricted {
-            updateStatus("麦克风权限未开启，请到系统设置允许 Sentence Reader 使用麦克风。")
+            updateStatus("麦克风权限未开启，请到系统设置允许 Click Reader 使用麦克风。")
             return
         }
 
@@ -121,11 +166,18 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
         isTranscribing = true
         recordButton?.isEnabled = false
         recordButton?.title = "转写中..."
-        updateStatus("正在用 FunASR 转写。若后台服务未就绪，会自动退回单次 worker。")
+        let provider = selectedProvider()
+        SpeechTranscriptionProvider.save(provider)
+        updateStatus(provider == .appleSpeech ? "苹果转写中..." : "FunASR 转写中...")
+        let audioNoteID = createPendingAudioNote(audioURL: audioURL, durationSeconds: duration, provider: provider.rawValue)
+
+        if provider == .appleSpeech {
+            transcribeWithAppleSpeech(audioURL: audioURL, audioNoteID: audioNoteID)
+            return
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let audioNoteID = self.createPendingAudioNote(audioURL: audioURL, durationSeconds: duration)
             do {
                 let text = try self.transcribeWithFunASR(audioURL: audioURL)
                 DispatchQueue.main.async {
@@ -135,8 +187,7 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
             } catch {
                 DispatchQueue.main.async {
                     self.latestAudioNoteID = audioNoteID
-                    self.updateStatus("FunASR 不可用，尝试系统语音识别...")
-                    self.transcribeWithAppleSpeech(audioURL: audioURL, funASRError: error, audioNoteID: audioNoteID)
+                    self.failTranscription("FunASR 转写失败：\(error.localizedDescription)", audioNoteID: audioNoteID)
                 }
             }
         }
@@ -211,14 +262,14 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
         )
     }
 
-    private func createPendingAudioNote(audioURL: URL, durationSeconds: Double) -> String? {
+    private func createPendingAudioNote(audioURL: URL, durationSeconds: Double, provider: String) -> String? {
         guard let bookID else {
             return nil
         }
         return readerAPI.createAudioNote(
             bookID: bookID,
             audioPath: audioURL.path,
-            provider: "funasr",
+            provider: provider,
             status: "pending",
             transcript: nil,
             durationSeconds: durationSeconds,
@@ -356,7 +407,7 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
         return text
     }
 
-    private func transcribeWithAppleSpeech(audioURL: URL, funASRError: Error, audioNoteID: String?) {
+    private func transcribeWithAppleSpeech(audioURL: URL, audioNoteID: String?) {
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -364,7 +415,7 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
                       let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")),
                       recognizer.isAvailable
                 else {
-                    self.failTranscription("FunASR 失败，系统语音识别也不可用：\(funASRError.localizedDescription)", audioNoteID: audioNoteID)
+                    self.failTranscription("苹果语音不可用", audioNoteID: audioNoteID)
                     return
                 }
 
@@ -1098,10 +1149,12 @@ private final class CognitiveDashboardWindowController: NSWindowController, NSTa
 private final class RuntimeEnvironmentWindowController: NSWindowController {
     private let loadPreflightReport: () -> [String: Any]?
     private let saveFunASRPaths: (String, String) -> Bool
+    private let saveSpeechProvider: (SpeechTranscriptionProvider) -> Void
     private let openPath: (String) -> Void
     private let summaryLabel = NSTextField(labelWithString: "等待检查")
     private let detailTextView = NSTextView()
     private let guideTextView = NSTextView()
+    private let speechProviderPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let funASRPythonField = NSTextField(string: "")
     private let funASRWorkerField = NSTextField(string: "")
     private var latestReportPath = ""
@@ -1112,15 +1165,20 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
     init(
         funasrPython: String,
         funasrWorker: String,
+        speechProvider: SpeechTranscriptionProvider,
         loadPreflightReport: @escaping () -> [String: Any]?,
         saveFunASRPaths: @escaping (String, String) -> Bool,
+        saveSpeechProvider: @escaping (SpeechTranscriptionProvider) -> Void,
         openPath: @escaping (String) -> Void
     ) {
         self.loadPreflightReport = loadPreflightReport
         self.saveFunASRPaths = saveFunASRPaths
+        self.saveSpeechProvider = saveSpeechProvider
         self.openPath = openPath
         funASRPythonField.stringValue = funasrPython
         funASRWorkerField.stringValue = funasrWorker
+        speechProviderPopup.addItems(withTitles: [SpeechTranscriptionProvider.appleSpeech.title, SpeechTranscriptionProvider.funASR.title])
+        speechProviderPopup.selectItem(withTitle: speechProvider.title)
 
         let window = NSWindow(
             contentRect: NSRect(x: 140, y: 120, width: 820, height: 680),
@@ -1155,6 +1213,7 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
 
         let pythonRow = labeledRow(label: "FunASR Python", field: funASRPythonField)
         let workerRow = labeledRow(label: "FunASR Worker", field: funASRWorkerField)
+        let providerRow = popupRow(label: "语音识别", popup: speechProviderPopup)
 
         detailTextView.isEditable = false
         detailTextView.isSelectable = true
@@ -1183,7 +1242,7 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
         let refreshButton = NSButton(title: "重新检查", target: self, action: #selector(refreshPreflight(_:)))
         refreshButton.bezelStyle = .rounded
 
-        let saveButton = NSButton(title: "保存语音路径", target: self, action: #selector(saveRuntimeSettings(_:)))
+        let saveButton = NSButton(title: "保存", target: self, action: #selector(saveRuntimeSettings(_:)))
         saveButton.bezelStyle = .rounded
 
         let openReportButton = NSButton(title: "打开预检报告", target: self, action: #selector(openPreflightReport(_:)))
@@ -1208,12 +1267,12 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
         buttonStack.alignment = .centerY
         buttonStack.spacing = 10
 
-        let stack = NSStackView(views: [topStack, summaryLabel, pythonRow, workerRow, detailScroll, guideTitle, guideScroll, buttonStack])
+        let stack = NSStackView(views: [topStack, summaryLabel, providerRow, pythonRow, workerRow, detailScroll, guideTitle, guideScroll, buttonStack])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
 
-        [stack, topStack, summaryLabel, pythonRow, workerRow, detailScroll, guideTitle, guideScroll, buttonStack].forEach {
+        [stack, topStack, summaryLabel, providerRow, pythonRow, workerRow, detailScroll, guideTitle, guideScroll, buttonStack].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         root.addSubview(stack)
@@ -1225,6 +1284,7 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
             stack.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
             topStack.widthAnchor.constraint(equalTo: stack.widthAnchor),
             summaryLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            providerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             pythonRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             workerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             detailScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -1255,6 +1315,24 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
         return stack
     }
 
+    private func popupRow(label: String, popup: NSPopUpButton) -> NSStackView {
+        let title = NSTextField(labelWithString: label)
+        title.font = NSFont(name: "Microsoft YaHei", size: 12) ?? NSFont.systemFont(ofSize: 12, weight: .medium)
+        title.textColor = .secondaryLabelColor
+        let stack = NSStackView(views: [title, popup])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 10
+        title.translatesAutoresizingMaskIntoConstraints = false
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            title.widthAnchor.constraint(equalToConstant: 116),
+            popup.widthAnchor.constraint(equalToConstant: 120),
+            popup.heightAnchor.constraint(equalToConstant: 26),
+        ])
+        return stack
+    }
+
     @objc private func refreshPreflight(_ sender: Any?) {
         summaryLabel.stringValue = "正在检查运行环境..."
         detailTextView.string = "正在运行 first-run preflight..."
@@ -1273,10 +1351,17 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
     }
 
     @objc private func saveRuntimeSettings(_ sender: Any?) {
+        let provider = SpeechTranscriptionProvider.fromTitle(speechProviderPopup.titleOfSelectedItem)
+        saveSpeechProvider(provider)
+        guard provider == .funASR else {
+            summaryLabel.stringValue = "已保存"
+            return
+        }
+
         let python = funASRPythonField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let worker = funASRWorkerField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !python.isEmpty, !worker.isEmpty else {
-            summaryLabel.stringValue = "语音路径不能为空"
+            summaryLabel.stringValue = "FunASR 路径不能为空"
             NSSound.beep()
             return
         }
@@ -1581,8 +1666,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
 
-        let appMenu = NSMenu(title: "Sentence Reader")
-        let quitItem = NSMenuItem(title: "退出 Sentence Reader", action: #selector(quitApplication(_:)), keyEquivalent: "q")
+        let appMenu = NSMenu(title: "Click Reader")
+        let quitItem = NSMenuItem(title: "退出 Click Reader", action: #selector(quitApplication(_:)), keyEquivalent: "q")
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
         appMenu.addItem(quitItem)
@@ -1610,7 +1695,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         NSApp.activate(ignoringOtherApps: true)
         showFirstRunGuideIfNeeded()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            self.startFunASRWarmServiceIfAvailable()
+            self.refreshSpeechWarmServiceForCurrentProvider()
         }
     }
 
@@ -1869,13 +1954,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         libraryHomeWebView.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
-        window.title = "Sentence Reader 书库"
+        window.title = "Click Reader 书库"
         statusLabel.stringValue = "已进入主界面；选择书籍后会在本窗口打开正文"
     }
 
     private func hideMainLibraryForReading() {
         libraryHomeWebView?.isHidden = true
-        window.title = "Sentence Reader"
+        window.title = "Click Reader"
         revealReaderChromeTemporarily()
     }
 
@@ -2075,7 +2160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             backing: .buffered,
             defer: false
         )
-        window.title = "Sentence Reader"
+        window.title = "Click Reader"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -2347,11 +2432,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let controller = RuntimeEnvironmentWindowController(
             funasrPython: paths.python,
             funasrWorker: paths.worker,
+            speechProvider: SpeechTranscriptionProvider.current,
             loadPreflightReport: { [weak self] in
                 self?.runFirstRunPreflightForApp()
             },
             saveFunASRPaths: { [weak self] python, worker in
                 self?.saveFunASRRuntimePaths(python: python, worker: worker) ?? false
+            },
+            saveSpeechProvider: { [weak self] provider in
+                SpeechTranscriptionProvider.save(provider)
+                self?.refreshSpeechWarmServiceForCurrentProvider()
             },
             openPath: { path in
                 NSWorkspace.shared.open(URL(fileURLWithPath: path))
@@ -2571,7 +2661,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     private func restartFunASRWarmServiceAfterConfigurationChange() {
         stopFunASRWarmService()
         funASRWarmupStarted = false
-        startFunASRWarmServiceIfAvailable()
+        refreshSpeechWarmServiceForCurrentProvider()
+    }
+
+    private func refreshSpeechWarmServiceForCurrentProvider() {
+        if SpeechTranscriptionProvider.current == .funASR {
+            startFunASRWarmServiceIfAvailable()
+        } else {
+            stopFunASRWarmService()
+            funASRWarmupStarted = false
+        }
     }
 
     private func saveFunASRRuntimePaths(python: String, worker: String) -> Bool {
@@ -2736,7 +2835,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             backing: .buffered,
             defer: false
         )
-        window.title = "Sentence Reader 书库"
+        window.title = "Click Reader 书库"
         window.minSize = NSSize(width: 920, height: 620)
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -2939,7 +3038,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         title.font = NSFont(name: "Microsoft YaHei", size: 20) ?? NSFont.systemFont(ofSize: 20, weight: .semibold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "所有导入的 EPUB 会复制进 Sentence Reader 内部书库；导入成功后原 EPUB 可删除。")
+        let subtitle = NSTextField(labelWithString: "所有导入的 EPUB 会复制进 Click Reader 内部书库；导入成功后原 EPUB 可删除。")
         subtitle.font = NSFont(name: "Microsoft YaHei", size: 12) ?? NSFont.systemFont(ofSize: 12)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
@@ -3269,7 +3368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         libraryHomeWebView.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
-        window.title = "Sentence Reader 单词本"
+        window.title = "Click Reader 单词本"
         statusLabel.stringValue = "已打开当前书的单词本"
     }
 
@@ -3846,7 +3945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         alert.messageText = "iPad 局域网阅读"
         let modeLine = lanReady
             ? "Reader API 已切换到局域网模式。"
-            : "Reader API 已响应本机访问，但未确认是局域网模式；如果 iPad 打不开，请退出 Sentence Reader 后重新打开并先点 iPad。"
+            : "Reader API 已响应本机访问，但未确认是局域网模式；如果 iPad 打不开，请退出 Click Reader 后重新打开并先点 iPad。"
         alert.informativeText = "\(modeLine)\n\n同一 Wi-Fi 下在 iPad Safari 打开主界面：\n\(url)\n\n直接阅读入口仍可用：\n\(readerURL)\n\n主界面地址已复制到剪贴板。"
         alert.addButton(withTitle: "打开本机主界面")
         alert.addButton(withTitle: "复制地址")
@@ -4538,8 +4637,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         recordButton.bezelStyle = .rounded
         recordButton.frame = NSRect(x: 0, y: 6, width: 92, height: 28)
 
-        let speechStatus = NSTextField(labelWithString: "语音笔记：优先使用本机 FunASR，音频和转写状态会写入 Reader API。")
-        speechStatus.frame = NSRect(x: 104, y: 8, width: 416, height: 22)
+        let providerPopup = NSPopUpButton(frame: NSRect(x: 104, y: 6, width: 92, height: 28), pullsDown: false)
+        providerPopup.addItems(withTitles: [SpeechTranscriptionProvider.appleSpeech.title, SpeechTranscriptionProvider.funASR.title])
+        providerPopup.selectItem(withTitle: SpeechTranscriptionProvider.current.title)
+
+        let speechStatus = NSTextField(labelWithString: "")
+        speechStatus.frame = NSRect(x: 208, y: 8, width: 312, height: 22)
         speechStatus.font = NSFont(name: "Microsoft YaHei", size: 11) ?? NSFont.systemFont(ofSize: 11)
         speechStatus.textColor = NSColor.secondaryLabelColor
         speechStatus.lineBreakMode = .byTruncatingTail
@@ -4548,15 +4651,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             textView: textView,
             statusLabel: speechStatus,
             recordButton: recordButton,
+            providerPopup: providerPopup,
             bookID: readerBookID,
             readerAPI: readerAPI
         )
         recordButton.target = speechController
         recordButton.action = #selector(NoteSpeechController.toggleRecording(_:))
+        providerPopup.target = speechController
+        providerPopup.action = #selector(NoteSpeechController.providerChanged(_:))
         noteSpeechController = speechController
 
         accessory.addSubview(scroll)
         accessory.addSubview(recordButton)
+        accessory.addSubview(providerPopup)
         accessory.addSubview(speechStatus)
         alert.accessoryView = accessory
         alert.beginSheetModal(for: window) { response in
@@ -4615,9 +4722,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let occurrence = Self.firstLookupOccurrence(from: payload)
         let displayWord = Self.lookupText(item?["surface"]).isEmpty ? word : Self.lookupText(item?["surface"])
         let meaning = Self.lookupText(item?["context_meaning_zh"])
+        let meaningSource = Self.lookupText(item?["meaning_source"])
         let alignmentStatus = Self.lookupText(item?["alignment_status"])
         let itemStatus = Self.lookupText(item?["status"])
         let occurrenceCount = Self.lookupText(item?["occurrence_count"])
+        let reviewable = (item?["reviewable"] as? Bool) ?? true
         let representativeEN = Self.lookupText(occurrence?["english_sentence"]).isEmpty
             ? (Self.lookupText(item?["representative_sentence_en"]).isEmpty ? sentence : Self.lookupText(item?["representative_sentence_en"]))
             : Self.lookupText(occurrence?["english_sentence"])
@@ -4630,6 +4739,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             lines.append("这本书的单词本暂时没有收录这个词。可以先朗读，也可以回到原句添加备注。")
         } else {
             lines.append("中文：\(meaning.isEmpty ? "未确认短义项" : meaning)")
+            if !meaningSource.isEmpty {
+                lines.append("来源：\(Self.lookupMeaningSourceTitle(meaningSource))")
+            }
             if !alignmentStatus.isEmpty {
                 lines.append("对齐：\(Self.lookupAlignmentTitle(alignmentStatus))")
             }
@@ -4671,7 +4783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             ("读词", "speak_word"),
             ("读句", "speak_sentence"),
         ]
-        if item == nil {
+        if item == nil || !reviewable {
             actions.append(("添加备注", "note"))
         } else {
             actions.append(("复习", "reviewing"))
@@ -4778,6 +4890,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return "缺中文对应句"
         default:
             return status
+        }
+    }
+
+    private static func lookupMeaningSourceTitle(_ source: String) -> String {
+        switch source {
+        case "lifestudy_domain_glossary": return "生命读经词库"
+        case "book_glossary": return "本书术语表"
+        case "user_glossary": return "用户修正"
+        case "dictionary_fallback": return "本地词典"
+        case "lifestudy_context": return "本书语境"
+        default: return source
         }
     }
 
@@ -5662,7 +5785,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       }
       function selectedEnglishWord() {
         const selection = window.getSelection ? window.getSelection() : null;
-        const text = selection ? String(selection.toString() || '').trim() : '';
+        const text = selection ? String(selection.toString() || '').replace(/\\s+/g, ' ').trim() : '';
+        if (!text) { return ''; }
+        if (/^[A-Za-z][A-Za-z' -]{0,96}[A-Za-z]$/.test(text)) {
+          return text;
+        }
         const match = text.match(/[A-Za-z][A-Za-z'-]*/);
         return match ? match[0] : '';
       }

@@ -27,12 +27,14 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Keep the interaction-router contract stable: sentence-level gestures win on sentence text; editing fields and controls still keep system behavior.
 - Use single-click/single-tap on an English word for lookup, double-click/double-tap for sentence notes, context click/two-finger click on a sentence for whole-sentence red highlight, `Command+C` for copying selected text, and `Option` + double-click as a backup word-lookup path on pointer devices.
 - English lookup must fall back to the general dictionary even when the current book has not generated a book-local vocabulary list.
+- English phrase lookup must preserve selected phrases such as `tree of life` instead of collapsing them into a single unusable token.
+- Life-study context meanings must stay book/domain-scoped and must not be imported into the general dictionary.
 - Common reading/business words such as `strategy`, `strategies`, `market`, `business`, and `the` must return a dictionary-backed result through `/books/{book_id}/lookup`.
 - The local dictionary should include the imported ECDICT-compatible source, not only the compact seed list.
 - Keep normal Mac app quitting behavior: `Command+Q` exits Sentence Reader.
 - Keep `docs/interaction_contract.md` and `scripts/sentence_reader_interaction_contract_smoke.py` passing before changing any sentence/system gesture boundary.
 - Persist books, reading position, highlights, notes, audio-note state, exports, and sync events through Reader API and PostgreSQL.
-- Warm FunASR after app launch and use it for local voice-note transcription when available.
+- Let the user choose Mac voice transcription provider in the UI; Apple Speech is the default, and FunASR is optional local transcription.
 - Open the iPad LAN reader at `http://<mac-lan-ip>:18180/lan/reader` on the same Wi-Fi.
 - Open the iPad LAN library at `http://<mac-lan-ip>:18180/library` on the same Wi-Fi.
 - Example LAN URL format: `http://192.168.1.100:18180/lan/reader`.
@@ -52,6 +54,35 @@ The product-grade check is not a single manual glance. It requires:
 - `python3 scripts/sentence_reader_import_ownership_static_smoke.py`
 - `python3 scripts/sentence_reader_interaction_contract_smoke.py`
 - `python3 scripts/sentence_reader_vocab_lookup_static_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_pipeline_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_import_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_domain_lookup_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_book_lookup_smoke.py` after Genesis Life-study is imported
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_review_pack_smoke.py` after Genesis Life-study is imported
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_apply_review_smoke.py` after Genesis review pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_review_ui_smoke.py` after Genesis review pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_review_suggestions_smoke.py` after Genesis review pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_word_review_pack_smoke.py` after Genesis full run exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_word_frequency_smoke.py` after Genesis full run exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_phrase_uncommon_pack_smoke.py` after Genesis full run exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_stage_gate_smoke.py` after Genesis review pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_frontend_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_corpus_inventory_smoke.py` after next-volume probes start
+- `.venv-reader-api/bin/python scripts/lifestudy_master_vocab_aggregate_smoke.py` after at least Genesis/Exodus/Leviticus full no-write outputs exist
+- `.venv-reader-api/bin/python scripts/lifestudy_all_words_master_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_all_words_master_full_smoke.py` after the 51-volume all-word table exists
+- `.venv-reader-api/bin/python scripts/lifestudy_all_words_chinese_context_candidates_smoke.py` after the 51-volume clean all-word table exists
+- `.venv-reader-api/bin/python scripts/lifestudy_dictionary_guided_review_v2_smoke.py` after the dictionary-guided learning review exists
+- `.venv-reader-api/bin/python scripts/lifestudy_needs_review_adjudication_v1_smoke.py` after the 2,205-row needs-review adjudication exists
+- `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_review_v2_smoke.py` after the front-end human-review candidate pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_v2_smoke.py` after the operator-delegated Codex adjudication pack exists
+- `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_apply_smoke.py` after the 26-row adjudicated dry-run boundary exists
+- `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_applied_smoke.py` after the 26-row adjudicated batch has been explicitly applied
+- `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_live_lookup_smoke.py` after Reader API is running and the 26-row adjudicated batch has been applied
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_v1_build_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_v1_apply_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_v1_frontend_smoke.py`
+- `.venv-reader-api/bin/python scripts/lifestudy_context_vocab_v1_live_lookup_smoke.py` after Reader API is running and V1 apply has completed
 - `.venv-reader-api/bin/python scripts/sentence_reader_library_ui_static_smoke.py`
 - `.venv-reader-api/bin/python scripts/sentence_reader_library_v2_smoke.py`
 - `python3 scripts/probe_readium_publication_open.py --timeout 300` must use the project fixture when the original Desktop EPUB is absent.
@@ -85,7 +116,7 @@ Stop this round when:
 1. The code changes are limited to stability, persistence, iPad LAN, voice fallback, tests, and docs.
 2. The hard checks pass.
 3. The live Reader API has exactly one listener on port `18180`, bound to all interfaces.
-4. FunASR health returns `{"ok": true}` on `127.0.0.1:18081`.
+4. Voice transcription provider selection is available; FunASR health is optional unless the selected provider is FunASR.
 5. The native app opens directly to the `书库` main interface in the main window.
 6. The native app exposes a real Library V2 interface through `/library`, not only a quick switch menu or fallback table.
 7. The first screen has `继续阅读`, recent reading, and recent notes/red highlights; it must not present engineering architecture copy as user-facing content.

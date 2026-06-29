@@ -6,7 +6,7 @@ Updated: 2026-06-29
 
 V2.1 is now the daily-use product-grade boundary for this Mac: PostgreSQL data base, Swift data integration, notes loop, multi-book loop, export loop, voice-note persistence, reading stability, Hermes sync, packaged runtime, Hermes ingestion, reviewable Cognitive OS draft generation, explicit draft-to-formal-intake promotion, operator review queue generation, transaction-style active-pack rebuild operation, a safe Reader API/Swift surface, runtime/bootstrap/preflight paths, recognizable Dock-pinned app access, and trusted same-LAN iPad browser reading are all implemented and covered by acceptance checks.
 
-日常可用产品级 in this project means local EPUB reading, source-independent EPUB imports, sentence-level annotations, notes, voice-note persistence, reading position restore, Reader API/PostgreSQL durability, packaged Mac app access, warm FunASR on this machine, and same-Wi-Fi iPad browser reading at the current Mac LAN URL, for example `http://<mac-lan-ip>:18180/lan/reader`.
+日常可用产品级 in this project means local EPUB reading, source-independent EPUB imports, sentence-level annotations, notes, voice-note persistence, reading position restore, Reader API/PostgreSQL durability, packaged Mac app access, selectable Mac voice transcription with Apple Speech as the default and FunASR as an optional local provider, and same-Wi-Fi iPad browser reading at the current Mac LAN URL, for example `http://<mac-lan-ip>:18180/lan/reader`.
 
 Source-independent import rule: after Sentence Reader reports that an EPUB has been imported, the original EPUB path is no longer a runtime dependency. The app copies and verifies the book at `~/Library/Application Support/SentenceReader/Books/<book_hash>/book.epub`, normalizes saved book-library records to that owned path, and only registers the owned path with Reader API/PostgreSQL. The user may delete or move the original source file after import.
 
@@ -25,6 +25,56 @@ Latest Mac selection/pagination refinement on 2026-06-29: the selection/system b
 Latest interaction-router refinement on 2026-06-29: Mac native reader and iPad LAN reader now use a shared `SentenceReaderInteractionRouter` contract, documented in `docs/interaction_contract.md` and locked by `scripts/sentence_reader_interaction_contract_smoke.py`. In plain sentence-reading state, Sentence Reader actions have priority: double-click/double-tap opens the sentence note flow, context click/two-finger click on a sentence toggles whole-sentence red highlight, and tap/click focuses the sentence. Clicking or tapping an English word now triggers lookup after a short delay; a real double-click/double-tap cancels that pending lookup and opens the note flow. Editing fields and controls still yield to system behavior. Active text selection can still be copied with `Command+C` or a non-sentence context menu, but context click on a sentence remains a Sentence Reader red-highlight command because that gesture is the app's core annotation shortcut. `Option` + double-click remains a backup lookup path on pointer devices, and the native app now installs a standard application menu plus a key monitor so `Command+Q` quits Sentence Reader.
 
 Latest vocabulary lookup repair on 2026-06-29: English click/tap lookup no longer depends only on prebuilt book-local vocabulary. If the current book has no `reader.book_vocab_items` entry for the clicked word, Reader API now falls back to `reader.dictionary_entries`, writes a safe dictionary-backed candidate into the current book vocabulary, and then returns a normal vocab item so review/known/edit actions still work. A compact general/business seed dictionary was added in `migrations/reader/005_general_dictionary_seed.sql`; larger ECDICT-style imports remain available through `scripts/sentence_reader_import_ecdict.py` when a CSV source is provided.
+
+Latest Life-study vocabulary pipeline status on 2026-06-29: the Genesis bilingual PDF has passed the accuracy-gated path for Genesis first 50 pages and Genesis full run. The 25 Genesis A/B entries have now been user-reviewed as approved in `Genesis-review-overrides.reviewed.json`, dry-run checked, and explicitly applied through `scripts/lifestudy_context_vocab_apply_review.py --apply`. The controlled import writes only A/B entries into the isolated `reader.domain_glossary_entries` and book-specific glossary/vocab boundary, not into `reader.dictionary_entries`. Current imported domain staging count is 25 active reviewed Genesis entries: 19 grade A and 6 grade B. C/D candidates remain report-only and never enter the reader lookup path. Reader API now uses this domain glossary only when the current book context clearly looks like Life-study/生命读经; normal books still fall back to book context and the general dictionary.
+
+Current Life-study book-specific status: `1-01创世记生命读经.epub` has been imported into Sentence Reader's owned app-support library as `book_e0679064039e4e298e9faf3127b65876` with title `创世记生命读经 / Life-study of Genesis`. The same 25 A/B Genesis entries have been written to that book's `reader.book_glossary` and `reader.book_vocab_items` rows and marked `lifestudy_reviewed` after approval. The import script now preserves `source='user'` glossary rows on conflict, so future runs do not overwrite user-corrected meanings.
+
+Latest Life-study review-gate status on 2026-06-29: Genesis now has a dedicated 25-entry human review pack under `reports/lifestudy_vocab_review/`. The reviewed override approves all 25 entries, missing book rows = 0, dictionary pollution = 0, human reviewed precision = 1.0, and `can_expand_next_volume=true`. The stage gate now reports `current_stage=ready_for_next_volume_probe`.
+
+Latest Life-study review-apply status on 2026-06-29: reviewed override application tooling is now implemented in `scripts/lifestudy_context_vocab_apply_review.py`, with `scripts/lifestudy_context_vocab_apply_review_smoke.py` locking the safety contract. The tool rejects pending templates, defaults to dry-run, requires explicit `--apply` for writes, hides rejected domain entries instead of deleting them, marks rejected book vocab as ignored, and preserves user-corrected meanings. The Genesis reviewed override was applied successfully: `domain_reviewed=25`, `approved=25`, and general dictionary pollution remains 0.
+
+Latest Life-study review UI status on 2026-06-29: Reader API now exposes `/lifestudy/vocab/review` plus `/api/lifestudy/vocab/review`, `/api/lifestudy/vocab/review/decision`, and `/api/lifestudy/vocab/review/dry-run`. The page can read the 25 Genesis entries, save approve/correct/reject decisions into `reports/lifestudy_vocab_review/Genesis-review-overrides.reviewed.json`, and run a no-write dry-run. It intentionally does not expose a database apply button; actual writes still require the explicit command-line `--apply` boundary.
+
+Latest Life-study assistant-suggestion status on 2026-06-29: `scripts/lifestudy_context_vocab_review_suggestions.py` now generates `Genesis-review-suggestions.json`, `Genesis-review-suggestions.md`, and `Genesis-review-overrides.assistant-suggested.json`. The suggestion pack is marked `assistant_suggestions_not_human_review`; it can accelerate review but does not count as human-reviewed accuracy and does not write PostgreSQL. The expansion gate now uses reviewed precision >= 0.85 instead of treating every rejection as a permanent blocker.
+
+Latest Life-study stage-gate status on 2026-06-29: `scripts/lifestudy_context_vocab_stage_gate.py` now generates `reports/lifestudy_vocab_review/Genesis-stage-gate.json` and `.md` without writing the database. It confirms Genesis first 50 pages, Genesis full run, controlled import, frontend lookup, and user-reviewed approval are complete. It now allows the next-volume probe.
+
+Latest Life-study corpus expansion status on 2026-06-29: `scripts/lifestudy_corpus_inventory.py` now inventories the Life-study bilingual PDF corpus under the 中英对照 directory and writes `reports/lifestudy_vocab_corpus/lifestudy_corpus_inventory.json`, `.csv`, and `.md`. The inventory finds 53 PDFs, 51 processable volumes, and 2 combined reference PDFs. Genesis, Exodus, and Leviticus full no-write runs are complete. Exodus full run produced 70,872 line pairs, 24,066 aligned text units, 133,934 candidates, and 19 A/B importable no-write candidates. Leviticus full run produced 19,671 line pairs, 6,203 aligned text units, 41,434 candidates, and 12 A/B importable no-write candidates. The remaining 48 processable volumes still need first-50 no-write probes before any full no-write run. The next safe volume is Numbers.
+
+Latest Life-study master vocabulary status on 2026-06-29: `scripts/lifestudy_master_vocab_aggregate.py` now merges all completed full no-write importable packs into one source-traced master vocabulary under `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.json`, `.csv`, and `.md`. The current master file uses Genesis, Exodus, and Leviticus as sources, contains 56 source rows collapsed into 26 unique terms, keeps per-term source volume/page/evidence/status, and marks 1 meaning conflict for review. It remains report-only and does not write PostgreSQL.
+
+Latest Life-study all-word master status on 2026-06-29: `scripts/lifestudy_all_words_master.py` now builds one unified all-book English word table for the full Life-study bilingual PDF corpus, not one table per volume. The output files are `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.json`, `.csv`, and `.md`. The current full run covers all 51 processable volumes, 207,168 per-volume source word rows, 38,166 unique normalized English words, 37,616 content words, 5,297,307 raw English tokens, and 2,521,585 content-word tokens. Each row keeps total frequency, content frequency, content-word flag, source volume/page summary, sample English evidence, sample Chinese context, suggested meaning status, and `import_ready=false`. The table is report-only and does not write PostgreSQL.
+
+Latest Life-study Context Vocabulary V1 status on 2026-06-29: the all-word master has been promoted through a 6-step quality gate into a small front-end usable V1 glossary. `scripts/lifestudy_context_vocab_v1_build.py` now creates a clean all-word master, rejected-noise report, Top 500 review queue, Top 2000 reserve queue, review pack, human-focus list, and importable pack. The current build starts from 38,166 raw unique words, keeps 37,302 raw words, merges them into 33,724 clean lemma groups, rejects 864 obvious non-useful/noisy words, and merges 3,578 variants. The Top 500 queue contains all required terms such as `economy`, `dispensing`, `mingled`, `transformation`, `regeneration`, `sanctification`, `justification`, `divine`, `spirit`, `life`, and `christ`. Only 34 entries have direct aligned Chinese evidence and are marked `import_ready=true`; 466 Top 500 entries remain review-only.
+
+Latest Life-study V1 import status on 2026-06-29: `scripts/lifestudy_context_vocab_v1_apply.py` dry-run and explicit `--apply` are implemented. The explicit apply wrote 34 A-grade reviewed terms into `reader.domain_glossary_entries` with `domain='lifestudy'` and `volume='All'`. It did not write to `reader.dictionary_entries`; dictionary pollution remains 0. The script also supports `--hide` for non-destructive rollback/hiding of this V1 batch.
+
+Latest Life-study V1 lookup status on 2026-06-29: Reader API lookup now checks the Life-study domain glossary before creating or returning dictionary fallback items for Life-study/生命读经 books. Live lookup smoke confirms `economy -> 经纶`, `dispensing -> 分赐`, and `mingled -> 调和` from `lifestudy_domain_glossary`, with source page and A-grade metadata. A non-Life-study book lookup does not use `lifestudy_domain_glossary`, so ordinary books are not polluted by the Life-study glossary.
+
+Latest Life-study single-word lane status on 2026-06-29: the Genesis full pipeline produced 34 single-word candidates, but the original phrase-first import gate correctly kept all of them out of the production glossary as C-grade review items. `scripts/lifestudy_context_vocab_word_review_pack.py` now turns those 34 words into a review-only pack with suggested Chinese meanings and evidence, written to `reports/lifestudy_vocab_review/Genesis-word-review-pack.json`, `.csv`, and `.md`. This fixes the visibility problem: Genesis currently has 25 imported phrase entries plus 34 single-word review candidates, not only 25 processed English terms.
+
+Latest Life-study all-word frequency status on 2026-06-29: `scripts/lifestudy_context_vocab_word_frequency.py` now builds a no-write Genesis full-word report. Genesis has 504,079 raw English word tokens, 9,243 raw unique words, 239,562 content word tokens after stopword removal, and 9,044 unique content words. The report writes `Genesis-word-frequency.json`, `.csv`, `.md`, plus `Genesis-raw-word-frequency.csv`. It gives every content word aligned Chinese context; 34 meanings come from Life-study/context-specific rules, 8,679 are low-confidence local dictionary fallback meanings, and 331 remain unmapped. None of these frequency rows are production import-ready until reviewed.
+
+Latest Life-study all-word Chinese-context candidate status on 2026-06-29: `scripts/lifestudy_all_words_chinese_context_candidates.py` now produces the missing full-corpus review surface that the V1 import pack did not provide. It reads the 51-volume clean all-word master and writes `reports/lifestudy_vocab_corpus/lifestudy_all_words_chinese_context_candidates.json`, `.csv`, `.md`, and summary JSON. The table covers all 33,724 clean lemma rows, keeps the Chinese evidence sentence for every row, and fills `draft_meaning_zh_from_chinese_context` from Chinese-document evidence. It uses three levels: 34 known Life-study terms found directly in Chinese context, 6,321 dictionary-guided terms that still must appear in the Chinese evidence sentence, and 27,369 statistical Chinese-context candidates. This table is report-only and does not write PostgreSQL; only reviewed items may be promoted later. Smoke checks currently lock examples such as `love -> 爱`, `world -> 世界`, `wonderful -> 奇妙`, `economy -> 经纶`, `dispensing -> 分赐`, and `mingled -> 调和`.
+
+Latest Life-study learning/integration guide status on 2026-06-29: `docs/lifestudy_vocab_learning_integration_guide.md` is now the human-facing guide for this vocabulary work. It separates the 33,724-row learning wordbook from the 34-entry front-end safe glossary, documents the 6,321 dictionary-guided candidates and 27,369 statistical candidates, and records the promotion rule: review first, dry-run, then explicitly apply only approved entries into Life-study-scoped glossary tables.
+
+Latest Life-study dictionary-guided Review V2 status on 2026-06-29: `scripts/lifestudy_dictionary_guided_review_v2.py` now reviews the 6,321 dictionary-guided Chinese-context candidates from the full 51-volume wordbook. It produces `lifestudy_dictionary_guided_review_v2.json`, `.csv`, `.md`, summary JSON, and split CSVs for auto-accepted learning candidates, possible front-end-after-human-review candidates, and manual-review candidates. Current counts: 4,116 auto-accepted for learning, 2,205 still needing manual review, 4,102 possible front-end candidates after human review, 14 learning-only generic words, and 0 front-end import-ready rows. The script is no-write and does not change PostgreSQL or the reader lookup path.
+
+Latest Life-study 2,205 needs-review adjudication status on 2026-06-29: `scripts/lifestudy_needs_review_adjudication_v1.py` now processes only `reports/lifestudy_vocab_corpus/lifestudy_dictionary_guided_review_v2_needs_manual_review.csv`, not the 4,116 auto-accepted rows and not the 26 front-end rows. The first-round rule is strict: final Chinese meanings must come from the same `evidence_en` / `evidence_zh_simp` bilingual record, with English variants allowed only when the variant appears in that same English evidence. Outputs are `lifestudy_needs_review_adjudication_v1.csv/.json/.md`, plus split CSVs for corrected learning candidates, learning-only, reject, and still-needs-manual-review. Current counts: input 2,205, adjudicated 2,202, corrected learning candidates 2, learning-only 2,195, rejected 5, still-needs-manual-review 3, front-end import-ready 0, database writes 0. Corrections are `sermon -> 讲道` and `misused -> 误用`; rejected examples include `message -> 教训` from header noise and generic `things/case/situation/stuff` meanings. `scripts/lifestudy_needs_review_adjudication_v1_smoke.py` passes and verifies row counts, split totals, no database writes, no front-end import flags, evidence/source fields, and that learning/corrected Chinese meanings appear in the same Chinese evidence.
+
+Latest Life-study front-end candidate Review V2 status on 2026-06-29: `scripts/lifestudy_frontend_candidate_review_v2.py` now narrows the 4,102 possible front-end candidates into a Top 500 human-review pack. The stricter gate requires domain/theological hints and keeps high-frequency generic words out of the suggested front-end list. Current counts: 500 top review rows, 28 `approve_after_human_check` suggestions, 472 `needs_human_review`, and 0 front-end import-ready rows. It also writes `lifestudy_frontend_candidate_review_v2_overrides_template.json/.csv` for future human approve/correct/reject decisions. No PostgreSQL writes are performed.
+
+Latest Life-study front-end candidate adjudication V2 status on 2026-06-29: `scripts/lifestudy_frontend_candidate_adjudication_v2.py` now performs the operator-delegated Codex review for those 28 suggestions instead of asking the user to inspect the table row by row. The no-write adjudication output is `reports/lifestudy_vocab_corpus/lifestudy_frontend_candidate_adjudication_v2.csv/.json/.md`; the next-step candidate pack is `lifestudy_frontend_candidate_adjudication_v2_ready_for_dry_run.csv`. Current counts: 28 reviewed, 21 approved as-is, 5 corrected, 1 learning-only, 1 needs-more-evidence, 26 ready for the next controlled dry-run candidate pack, and 0 front-end import-ready rows. Corrections include `redemption -> 救赎`, `righteousness -> 公义`, `reality -> 实际`, `anointing -> 受膏；膏油的涂抹`, and `priesthood -> 祭司职分`. `living` stays learning-only and `sacrifice` stays held for more evidence. No PostgreSQL writes are performed.
+
+Latest Life-study front-end candidate apply-boundary status on 2026-06-29: `scripts/lifestudy_frontend_candidate_adjudication_apply.py` now provides the controlled dry-run/apply/hide boundary for the 26 Codex-adjudicated first-batch words. It defaults to dry-run, writes only to `reader.domain_glossary_entries` when explicitly run with `--apply`, preserves user-corrected meanings on conflict, supports non-destructive `--hide`, and never writes to `reader.dictionary_entries`. The explicit apply has now been run for those 26 words. Preflight before apply found 59 active Life-study domain terms and 0 dictionary pollution; after apply, the Life-study active domain count is 85 and the 26 new entries are tagged with `metadata.source='lifestudy_frontend_candidate_adjudication_v2'`. `scripts/lifestudy_frontend_candidate_adjudication_apply_smoke.py` and `scripts/lifestudy_frontend_candidate_adjudication_applied_smoke.py` pass, confirming dry-run safety, 26 applied rows, corrected meanings, held-term exclusion, and dictionary pollution 0.
+
+Latest Life-study front-end adjudicated lookup status on 2026-06-29: `scripts/lifestudy_frontend_candidate_adjudication_live_lookup_smoke.py` now verifies that applied adjudicated terms appear through the real Reader API lookup path for the imported Life-study Genesis book and do not leak into an ordinary book. Live checks pass for `redemption -> 救赎`, `righteousness -> 公义`, `reality -> 实际`, `anointing -> 受膏；膏油的涂抹`, and `priesthood -> 祭司职分`; each resolves from `lifestudy_domain_glossary` with B-grade adjudicated metadata.
+
+Latest Life-study phrase/uncommon document status on 2026-06-29: `scripts/lifestudy_context_vocab_phrase_uncommon_pack.py` now builds a review-only Genesis document combining 25 active high-confidence phrases, 150 high-frequency phrase candidates, and 34 uncommon/domain words. Outputs are `Genesis-phrase-uncommon-pack.json`, `.csv`, and `.md`. The document is intentionally smaller than the 9,044-word frequency report and is meant to be the first practical review surface for phrases and uncommon words before expanding beyond Genesis.
+
+Latest voice provider refinement on 2026-06-29: Mac voice notes now expose a compact provider picker instead of explanatory speech text. The note sheet and runtime window can choose `苹果` or `FunASR`; `苹果` is the default. FunASR remains available as a local optional provider, but it no longer starts automatically when the selected provider is Apple Speech. Product readiness smoke now treats FunASR health as optional rather than a default hard requirement.
 
 Repeat verification on 2026-06-25 13:27 CST passed the hard product checks again: `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, Reader API pytest, Python compileall, Swift compile, app packaging, and live LAN/FunASR readiness. No functional source or PostgreSQL schema change was required.
 
@@ -874,6 +924,92 @@ English lookup is no longer only a UI gesture. The backend now has a real fallba
 - lookup quality is now backed by a real local dictionary, not just a tiny seed list
 
 The Readium publication-open probe also no longer depends on a specific Desktop EPUB. The project now generates and packages `fixtures/sentence-reader-smoke.epub` as the stable test fixture, so the original source book can be moved or deleted without breaking validation.
+
+## Life-study Context Vocabulary Pipeline Status
+
+The Life-study bilingual vocabulary path has moved from probe to an accuracy-gated V1 pipeline.
+
+Current implemented files:
+
+- `scripts/lifestudy_context_vocab_pipeline.py`
+- `scripts/lifestudy_context_vocab_pipeline_smoke.py`
+- `scripts/lifestudy_context_vocab_import.py`
+- `scripts/lifestudy_context_vocab_import_smoke.py`
+- `scripts/lifestudy_context_vocab_domain_lookup_smoke.py`
+- `scripts/lifestudy_context_vocab_book_lookup_smoke.py`
+- `scripts/lifestudy_context_vocab_review_pack.py`
+- `scripts/lifestudy_context_vocab_review_pack_smoke.py`
+- `scripts/lifestudy_context_vocab_frontend_smoke.py`
+- `docs/lifestudy_vocab_pipeline_plan.md`
+
+Current source:
+
+- The Life-study bilingual PDF corpus under the 中英对照 directory.
+- Genesis is the only reviewed/applied production volume.
+- Exodus and Leviticus are completed no-write candidate sources only.
+
+Genesis first 50 pages passed the quality gate:
+
+- line pairs: 2,264
+- aligned text units: 788
+- candidates: 8,153
+- A/B importable candidates: 22
+- A/B rule-gated precision estimate: 0.95
+- top-100 noise/discard count: 0
+- database writes: false
+
+Genesis full run also completed:
+
+- pages: 1,255
+- line pairs: 57,002
+- aligned text units: 20,481
+- candidates: 112,642
+- A/B importable candidates: 25
+- quality grades: A=19, B=6, C=81,361, D=31,256
+- A/B rule-gated precision estimate: 0.95
+- top-100 noise/discard count: 0
+- database writes: false
+
+Controlled import after Genesis gate:
+
+- domain staging: 25 active Genesis entries in `reader.domain_glossary_entries`, A=19, B=6
+- imported target book: `book_e0679064039e4e298e9faf3127b65876`
+- imported target title: `创世记生命读经 / Life-study of Genesis`
+- imported source EPUB: `1-01创世记生命读经.epub`
+- book-specific rows: 25 `reader.book_glossary`, 25 `reader.book_vocab_items`, 25 `reader.lexemes`
+- C/D imported: 0
+- general dictionary pollution: 0
+- smoke lookup: `tree of life` returns `生命树` from `book_glossary`
+- review pack outputs: `reports/lifestudy_vocab_review/Genesis-review-pack.json`, `.csv`, `.md`, and `Genesis-review-overrides.template.json`
+- human review pending: 0 for Genesis A/B entries
+- can expand next volume: true for controlled no-write probes
+
+Generated reports:
+
+- `reports/lifestudy_vocab_pipeline/01_Genesis-120-pages-1-50-pipeline.json`
+- `reports/lifestudy_vocab_pipeline/01_Genesis-120-pages-1-50-importable.json`
+- `reports/lifestudy_vocab_pipeline/01_Genesis-120-pages-1-1255-pipeline.json`
+- `reports/lifestudy_vocab_pipeline/01_Genesis-120-pages-1-1255-importable.json`
+- `reports/lifestudy_vocab_pipeline/02_Exodus-185-pages-1-1579-importable.json`
+- `reports/lifestudy_vocab_pipeline/03_Leviticus-64-pages-1-462-importable.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_corpus_inventory.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.csv`
+- `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.csv`
+- `reports/lifestudy_vocab_corpus/lifestudy_clean_all_words_master.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_top500_queue.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_top500_queue.csv`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_top2000_queue.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_v1_review_pack.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_v1_importable.json`
+- `reports/lifestudy_vocab_corpus/lifestudy_vocab_v1_importable.csv`
+
+The pipeline uses OpenCC `t2s`, filters obvious headers/noise, emits A/B/C/D grades, and keeps C/D out of importable reports. It also blocks OCR-damaged phrases such as `light darkness`.
+
+Controlled import is now applied for Genesis only. The safe boundary remains: future runs must dry-run first, must not overwrite `source='user'` glossary rows, and must not import C/D candidates or write Life-study meanings into `reader.dictionary_entries`.
+
+Frontend lookup is now phrase-safe: selected English phrases such as `tree of life` are preserved by the Mac reader and matched by Reader API without collapsing them into `treeoflife`. Single-word lookup and dictionary fallback remain in place.
 
 ## Next Required Step
 

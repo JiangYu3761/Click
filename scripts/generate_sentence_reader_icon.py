@@ -45,8 +45,8 @@ NSRect(x: 0, y: 0, width: canvas, height: canvas).fill()
 let radius = canvas * 0.205
 let background = NSBezierPath(roundedRect: NSRect(x: canvas * 0.055, y: canvas * 0.055, width: canvas * 0.89, height: canvas * 0.89), xRadius: radius, yRadius: radius)
 let gradient = NSGradient(colors: [
-    NSColor(calibratedRed: 0.10, green: 0.14, blue: 0.18, alpha: 1.0),
-    NSColor(calibratedRed: 0.02, green: 0.08, blue: 0.10, alpha: 1.0)
+    NSColor(calibratedRed: 0.08, green: 0.10, blue: 0.07, alpha: 1.0),
+    NSColor(calibratedRed: 0.01, green: 0.08, blue: 0.07, alpha: 1.0)
 ])!
 gradient.draw(in: background, angle: 90)
 
@@ -99,6 +99,43 @@ let glint = NSBezierPath(ovalIn: NSRect(x: canvas * 0.25, y: canvas * 0.66, widt
 NSColor(calibratedWhite: 1, alpha: 0.30).setFill()
 glint.fill()
 
+let clickRing = NSBezierPath(ovalIn: NSRect(x: canvas * 0.62, y: canvas * 0.60, width: canvas * 0.22, height: canvas * 0.22))
+NSColor(calibratedRed: 0.97, green: 0.75, blue: 0.30, alpha: 0.92).setStroke()
+clickRing.lineWidth = max(1, canvas * 0.018)
+clickRing.stroke()
+
+let clickCore = NSBezierPath(ovalIn: NSRect(x: canvas * 0.705, y: canvas * 0.685, width: canvas * 0.052, height: canvas * 0.052))
+NSColor(calibratedRed: 0.97, green: 0.75, blue: 0.30, alpha: 1).setFill()
+clickCore.fill()
+
+let badge = NSBezierPath(roundedRect: NSRect(x: canvas * 0.20, y: canvas * 0.15, width: canvas * 0.43, height: canvas * 0.23), xRadius: canvas * 0.055, yRadius: canvas * 0.055)
+NSColor(calibratedRed: 0.03, green: 0.09, blue: 0.08, alpha: 0.90).setFill()
+badge.fill()
+NSColor(calibratedRed: 0.97, green: 0.75, blue: 0.30, alpha: 0.90).setStroke()
+badge.lineWidth = max(1, canvas * 0.010)
+badge.stroke()
+
+let crAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: canvas * 0.145, weight: .black),
+    .foregroundColor: NSColor(calibratedRed: 0.98, green: 0.91, blue: 0.73, alpha: 1)
+]
+("CR" as NSString).draw(in: NSRect(x: canvas * 0.255, y: canvas * 0.182, width: canvas * 0.34, height: canvas * 0.17), withAttributes: crAttrs)
+
+let cursor = NSBezierPath()
+cursor.move(to: NSPoint(x: canvas * 0.70, y: canvas * 0.26))
+cursor.line(to: NSPoint(x: canvas * 0.70, y: canvas * 0.52))
+cursor.line(to: NSPoint(x: canvas * 0.88, y: canvas * 0.35))
+cursor.line(to: NSPoint(x: canvas * 0.78, y: canvas * 0.34))
+cursor.line(to: NSPoint(x: canvas * 0.84, y: canvas * 0.20))
+cursor.line(to: NSPoint(x: canvas * 0.78, y: canvas * 0.18))
+cursor.line(to: NSPoint(x: canvas * 0.72, y: canvas * 0.32))
+cursor.close()
+NSColor(calibratedWhite: 1, alpha: 0.96).setFill()
+cursor.fill()
+NSColor(calibratedRed: 0.03, green: 0.08, blue: 0.08, alpha: 0.72).setStroke()
+cursor.lineWidth = max(1, canvas * 0.010)
+cursor.stroke()
+
 NSGraphicsContext.restoreGraphicsState()
 
 guard let data = rep.representation(using: .png, properties: [:]) else {
@@ -124,7 +161,7 @@ ICON_FILES = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate Sentence Reader .icns app icon.")
+    parser = argparse.ArgumentParser(description="Generate Click Reader .icns app icon.")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 

@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from reader_api import db
 
 
-app = FastAPI(title="Sentence Reader API", version="2.0.0")
+app = FastAPI(title="Click Reader API", version="2.0.0")
 
 
 DEFAULT_HERMES_COGNITIVE_OS_DIR = Path(
@@ -206,6 +206,16 @@ class LibraryBatchHide(BaseModel):
     book_ids: list[str] = Field(default_factory=list)
 
 
+class LibraryOrganizationPatch(BaseModel):
+    favorite: Optional[bool] = None
+    custom_category: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class LibraryBatchOrganizationPatch(LibraryOrganizationPatch):
+    book_ids: list[str] = Field(default_factory=list)
+
+
 class VocabBuildRequest(BaseModel):
     limit: int = 500
     min_count: int = 1
@@ -221,6 +231,13 @@ class VocabPatch(BaseModel):
 
 class VocabReviewCreate(BaseModel):
     rating: str
+
+
+class LifeStudyVocabReviewDecision(BaseModel):
+    term: str
+    decision: str
+    corrected_meaning_zh: Optional[str] = None
+    note: Optional[str] = None
 
 
 class LookupEventCreate(BaseModel):
@@ -461,7 +478,7 @@ def xml_escape(value: Any) -> str:
 
 def generated_cover_svg(book: dict[str, Any]) -> bytes:
     title = str(book.get("title") or "Untitled")
-    author = str(book.get("author") or "Sentence Reader")
+    author = str(book.get("author") or "Click Reader")
     book_id = str(book.get("id") or book.get("book_hash") or title)
     primary, accent = cover_palette(book_id)
     title_lines = [title[i : i + 12] for i in range(0, min(len(title), 36), 12)] or ["Untitled"]
@@ -475,13 +492,23 @@ def generated_cover_svg(book: dict[str, Any]) -> bytes:
       <stop offset="0" stop-color="{primary}"/>
       <stop offset="1" stop-color="#0B1020"/>
     </linearGradient>
+    <linearGradient id="veil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity=".05"/>
+      <stop offset=".58" stop-color="#000000" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".55"/>
+    </linearGradient>
   </defs>
   <rect width="360" height="520" rx="22" fill="url(#g)"/>
+  <rect width="360" height="520" rx="22" fill="url(#veil)"/>
   <rect x="22" y="24" width="316" height="472" rx="16" fill="none" stroke="{accent}" stroke-width="3" opacity=".72"/>
   <rect x="34" y="56" width="92" height="7" rx="3.5" fill="{accent}"/>
   {title_svg}
   <text x="34" y="426" font-size="18" fill="#CBD5E1">{xml_escape(author[:28])}</text>
-  <text x="34" y="462" font-size="13" fill="{accent}" letter-spacing="2">SENTENCE READER</text>
+  <g font-size="15" font-weight="700">
+    <text x="34" y="462" fill="{accent}">逐句读懂</text>
+    <text x="132" y="462" fill="#F8FAFC">语境查词</text>
+    <text x="230" y="462" fill="#C7F0D8">复习沉淀</text>
+  </g>
 </svg>"""
     return svg.encode("utf-8")
 
@@ -582,7 +609,7 @@ def lan_reader_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Sentence Reader LAN</title>
+  <title>Click Reader LAN</title>
   <style>
     :root { color-scheme: dark; --bg:#050505; --panel:#141414; --text:#f4f4f4; --muted:#aaa; --line:#2b2b2b; --blue:#62a8ff; --red:rgba(255,59,48,.62); --lan-page-width:100vw; --lan-toolbar-height:42px; --lan-page-gap:36px; --reader-font-size:20px; --reader-line-height:1.82; --reader-side-pad:18px; --reader-bottom-pad:18px; }
     * { box-sizing: border-box; }
@@ -653,7 +680,7 @@ def lan_reader_html() -> str:
 <body>
   <div id="scrim"></div>
   <aside id="drawer">
-    <div id="drawerHeader"><strong>Sentence Reader</strong><button id="closeDrawer">收起</button></div>
+    <div id="drawerHeader"><strong>Click Reader</strong><button id="closeDrawer">收起</button></div>
     <div id="books"></div>
     <div id="chapters"></div>
   </aside>
@@ -1582,11 +1609,51 @@ def vocabulary_output_dir() -> Path:
     return Path.home() / "Library" / "Application Support" / "SentenceReader" / "Vocabulary"
 
 
+def lifestudy_vocab_review_dir() -> Path:
+    return reader_runtime_root() / "reports" / "lifestudy_vocab_review"
+
+
+def lifestudy_vocab_review_pack_path() -> Path:
+    return lifestudy_vocab_review_dir() / "Genesis-review-pack.json"
+
+
+def lifestudy_vocab_review_template_path() -> Path:
+    return lifestudy_vocab_review_dir() / "Genesis-review-overrides.template.json"
+
+
+def lifestudy_vocab_review_override_path() -> Path:
+    return lifestudy_vocab_review_dir() / "Genesis-review-overrides.reviewed.json"
+
+
 def clean_vocab_word(value: str) -> str:
     word = str(value or "").lower().replace("’", "'").strip("'")
     if word.endswith("'s"):
         word = word[:-2]
     return re.sub(r"[^a-z']", "", word).replace("'", "")
+
+
+def normalize_vocab_lookup_text(value: str) -> str:
+    text = str(value or "").lower().replace("’", "'")
+    text = re.sub(r"[^a-z'\-\s]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" '-")
+    return text
+
+
+def vocab_lookup_terms(value: str) -> list[str]:
+    raw = normalize_vocab_lookup_text(value)
+    compact = clean_vocab_word(value)
+    terms: list[str] = []
+
+    def add(term: str) -> None:
+        term = normalize_vocab_lookup_text(term)
+        if len(term) >= 2 and term not in terms:
+            terms.append(term)
+
+    add(raw)
+    add(raw.replace("-", " "))
+    if compact and compact not in terms:
+        terms.append(compact)
+    return terms
 
 
 def vocab_lookup_candidates(clean_word: str) -> list[str]:
@@ -1626,6 +1693,209 @@ def vocab_limit(value: int, default: int = 300) -> int:
     return max(1, min(raw, 1000))
 
 
+def normalize_lifestudy_review_term(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def load_lifestudy_review_pack() -> dict[str, Any]:
+    path = lifestudy_vocab_review_pack_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Life-study review pack not found: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema") != "sentence_reader.lifestudy_vocab_review_pack.v1":
+        raise HTTPException(status_code=500, detail=f"unexpected review pack schema: {payload.get('schema')}")
+    if payload.get("database_write_performed") is not False:
+        raise HTTPException(status_code=500, detail="review pack must be a no-write report")
+    return payload
+
+
+def lifestudy_review_base_override_payload(review_pack: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "sentence_reader.lifestudy_vocab_review_overrides.v1",
+        "source_review_pack": str(lifestudy_vocab_review_pack_path()),
+        "instructions": [
+            "Set decision to approve, correct, or reject.",
+            "For correct, fill corrected_meaning_zh.",
+            "For reject, fill note.",
+            "This reviewed file is UI-managed and still requires command-line --apply before database writes.",
+        ],
+        "items": [
+            {
+                "term": item.get("term") or "",
+                "current_meaning_zh": item.get("current_meaning_zh") or "",
+                "decision": "pending",
+                "corrected_meaning_zh": "",
+                "note": "",
+            }
+            for item in review_pack.get("items") or []
+        ],
+    }
+
+
+def load_lifestudy_review_overrides(review_pack: dict[str, Any], *, create_if_missing: bool = False) -> dict[str, Any]:
+    path = lifestudy_vocab_review_override_path()
+    if path.exists():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    else:
+        template = lifestudy_vocab_review_template_path()
+        if template.exists():
+            payload = json.loads(template.read_text(encoding="utf-8"))
+        else:
+            payload = lifestudy_review_base_override_payload(review_pack)
+        if create_if_missing:
+            write_lifestudy_review_overrides(payload)
+    if payload.get("schema") != "sentence_reader.lifestudy_vocab_review_overrides.v1":
+        raise HTTPException(status_code=500, detail=f"unexpected override schema: {payload.get('schema')}")
+    return merge_lifestudy_review_overrides(review_pack, payload)
+
+
+def write_lifestudy_review_overrides(payload: dict[str, Any]) -> None:
+    path = lifestudy_vocab_review_override_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def merge_lifestudy_review_overrides(review_pack: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    existing = {
+        normalize_lifestudy_review_term(str(item.get("term") or "")): dict(item)
+        for item in payload.get("items") or []
+    }
+    merged = lifestudy_review_base_override_payload(review_pack)
+    for item in merged["items"]:
+        term = normalize_lifestudy_review_term(str(item.get("term") or ""))
+        if term in existing:
+            item.update(
+                {
+                    "decision": str(existing[term].get("decision") or "pending"),
+                    "corrected_meaning_zh": str(existing[term].get("corrected_meaning_zh") or ""),
+                    "note": str(existing[term].get("note") or ""),
+                }
+            )
+    return merged
+
+
+def lifestudy_review_decision_counts(items: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"pending": 0, "approve": 0, "correct": 0, "reject": 0}
+    for item in items:
+        decision = str(item.get("decision") or "pending").strip().lower()
+        counts[decision] = counts.get(decision, 0) + 1
+    return counts
+
+
+def lifestudy_review_api_payload() -> dict[str, Any]:
+    review_pack = load_lifestudy_review_pack()
+    overrides = load_lifestudy_review_overrides(review_pack)
+    override_map = {
+        normalize_lifestudy_review_term(str(item.get("term") or "")): item
+        for item in overrides.get("items") or []
+    }
+    items: list[dict[str, Any]] = []
+    for item in review_pack.get("items") or []:
+        term = normalize_lifestudy_review_term(str(item.get("term") or ""))
+        override = override_map.get(term) or {}
+        decision = str(override.get("decision") or "pending")
+        corrected = str(override.get("corrected_meaning_zh") or "")
+        items.append(
+            {
+                **item,
+                "decision": decision,
+                "corrected_meaning_zh": corrected,
+                "review_note": str(override.get("note") or ""),
+                "final_meaning_zh": corrected if decision == "correct" else item.get("current_meaning_zh"),
+            }
+        )
+    decision_counts = lifestudy_review_decision_counts(items)
+    accepted_count = decision_counts.get("approve", 0) + decision_counts.get("correct", 0)
+    rejected_count = decision_counts.get("reject", 0)
+    pending_count = decision_counts.get("pending", 0)
+    human_reviewed_precision = accepted_count / len(items) if pending_count == 0 and items else None
+    quality = review_pack.get("quality") or {}
+    return {
+        "schema": "sentence_reader.lifestudy_vocab_review_api.v1",
+        "review_pack": str(lifestudy_vocab_review_pack_path()),
+        "override_file": str(lifestudy_vocab_review_override_path()),
+        "database_write_performed": False,
+        "quality": quality,
+        "decision_counts": decision_counts,
+        "accepted_count": accepted_count,
+        "rejected_count": rejected_count,
+        "human_reviewed_precision": human_reviewed_precision,
+        "reviewed_precision_target": 0.85,
+        "can_dry_run_apply": pending_count == 0,
+        "can_expand_next_volume": pending_count == 0
+        and human_reviewed_precision is not None
+        and human_reviewed_precision >= 0.85
+        and int(quality.get("missing_book_row_count") or 0) == 0
+        and int(quality.get("dictionary_pollution_count") or 0) == 0,
+        "items": items,
+    }
+
+
+def update_lifestudy_review_decision(payload: LifeStudyVocabReviewDecision) -> dict[str, Any]:
+    review_pack = load_lifestudy_review_pack()
+    overrides = load_lifestudy_review_overrides(review_pack, create_if_missing=True)
+    term = normalize_lifestudy_review_term(payload.term)
+    decision = str(payload.decision or "").strip().lower()
+    if decision not in {"pending", "approve", "correct", "reject"}:
+        raise HTTPException(status_code=400, detail="decision must be pending/approve/correct/reject")
+    corrected = str(payload.corrected_meaning_zh or "").strip()
+    note = str(payload.note or "").strip()
+    if decision == "correct" and not corrected:
+        raise HTTPException(status_code=400, detail="correct decision requires corrected_meaning_zh")
+    if decision == "reject" and not note:
+        raise HTTPException(status_code=400, detail="reject decision requires note")
+    found = False
+    for item in overrides.get("items") or []:
+        if normalize_lifestudy_review_term(str(item.get("term") or "")) == term:
+            item["decision"] = decision
+            item["corrected_meaning_zh"] = corrected if decision == "correct" else ""
+            item["note"] = note
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail=f"review term not found: {term}")
+    write_lifestudy_review_overrides(overrides)
+    return lifestudy_review_api_payload()
+
+
+def dry_run_lifestudy_review_apply() -> dict[str, Any]:
+    review_pack = load_lifestudy_review_pack()
+    overrides = load_lifestudy_review_overrides(review_pack, create_if_missing=True)
+    write_lifestudy_review_overrides(overrides)
+    script = reader_script_path("lifestudy_context_vocab_apply_review.py")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--review-pack",
+            str(lifestudy_vocab_review_pack_path()),
+            "--overrides",
+            str(lifestudy_vocab_review_override_path()),
+        ],
+        cwd=reader_runtime_root(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    parsed: dict[str, Any] | None = None
+    if proc.stdout.strip():
+        try:
+            parsed = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            parsed = None
+    return {
+        "schema": "sentence_reader.lifestudy_vocab_review_dry_run.v1",
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "database_write_performed": False,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "result": parsed,
+    }
+
+
 def normalize_glossary_term(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
@@ -1637,6 +1907,7 @@ def glossary_lateral_sql() -> str:
       FROM reader.book_glossary g
       WHERE g.book_id = bvi.book_id
         AND lower(g.term) IN (lower(bvi.surface), lower(coalesce(bvi.lemma, '')))
+        AND g.source <> 'lifestudy_rejected'
       ORDER BY
         CASE WHEN lower(g.term) = lower(bvi.surface) THEN 0 ELSE 1 END,
         CASE WHEN g.source = 'user' THEN 0 ELSE 1 END,
@@ -1669,6 +1940,92 @@ def dictionary_lateral_sql() -> str:
       LIMIT 1
     ) d ON true
     """
+
+
+def book_lifestudy_domain_enabled(conn: Any, book_id: str) -> bool:
+    row = conn.execute(
+        """
+        SELECT b.title, b.book_hash, string_agg(COALESCE(bf.file_path, ''), ' ') AS file_paths
+        FROM reader.books b
+        LEFT JOIN reader.book_files bf ON bf.book_id = b.id
+        WHERE b.id = %s
+        GROUP BY b.id
+        """,
+        (book_id,),
+    ).fetchone()
+    if not row:
+        return False
+    text = " ".join(str(row.get(key) or "") for key in ("title", "book_hash", "file_paths")).lower()
+    return any(marker in text for marker in ("life-study", "life study", "lifestudy", "生命读经", "生命讀經"))
+
+
+def find_domain_glossary_entry(conn: Any, book_id: str, lookup_terms: list[str], compact_word: str) -> Optional[dict[str, Any]]:
+    if not lookup_terms and not compact_word:
+        return None
+    row = conn.execute(
+        """
+        SELECT *
+        FROM reader.domain_glossary_entries d
+        WHERE d.domain = 'lifestudy'
+          AND d.language = 'en'
+          AND d.status = 'active'
+          AND d.quality_grade IN ('A', 'B')
+          AND (
+            lower(d.term) = ANY(%s::text[])
+            OR lower(coalesce(d.lemma, '')) = ANY(%s::text[])
+            OR regexp_replace(lower(d.term), '[^a-z]', '', 'g') = %s
+            OR regexp_replace(lower(coalesce(d.lemma, '')), '[^a-z]', '', 'g') = %s
+          )
+        ORDER BY
+          CASE WHEN lower(d.term) = ANY(%s::text[]) THEN 0 ELSE 1 END,
+          CASE d.quality_grade WHEN 'A' THEN 0 ELSE 1 END,
+          d.confidence DESC,
+          d.occurrence_count DESC,
+          d.score DESC
+        LIMIT 1
+        """,
+        (lookup_terms, lookup_terms, compact_word, compact_word, lookup_terms),
+    ).fetchone()
+    if not row:
+        return None
+    entry = dict(row)
+    return {
+        "id": "",
+        "book_id": book_id,
+        "surface": entry.get("term") or "",
+        "lemma": entry.get("lemma") or entry.get("term") or "",
+        "context_meaning_zh": entry.get("meaning_zh") or "",
+        "meaning_source": "lifestudy_domain_glossary",
+        "alignment_status": "confirmed_context_meaning" if entry.get("quality_grade") == "A" else "paraphrased_context_meaning",
+        "alignment_reason": f"Life-study domain glossary {entry.get('quality_grade')} grade; confidence={entry.get('confidence')}",
+        "representative_sentence_en": entry.get("evidence_en") or "",
+        "representative_sentence_zh": entry.get("evidence_zh") or "",
+        "occurrence_count": entry.get("occurrence_count") or 0,
+        "chapter_count": 0,
+        "score": entry.get("score") or 0,
+        "status": "candidate",
+        "user_note": "",
+        "metadata": {
+            "source": "reader.domain_glossary_entries",
+            "domain": entry.get("domain") or "",
+            "volume": entry.get("volume") or "",
+            "source_title": entry.get("source_title") or "",
+            "source_page": entry.get("source_page"),
+            "quality_grade": entry.get("quality_grade") or "",
+            "reviewable": False,
+        },
+        "reviewable": False,
+        "glossary": {
+            "term": entry.get("term") or "",
+            "meaning_zh": entry.get("meaning_zh") or "",
+            "source": "lifestudy_domain_glossary",
+            "confidence": entry.get("confidence"),
+        },
+        "dictionary": {},
+        "user_vocab": {},
+        "created_at": jsonable(entry.get("created_at")),
+        "updated_at": jsonable(entry.get("updated_at")),
+    }
 
 
 def find_dictionary_entry(conn: Any, clean_word: str) -> Optional[dict[str, Any]]:
@@ -1958,7 +2315,9 @@ def list_book_vocabulary(
 def lookup_book_word(book_id: str, word: str, sentence_id: Optional[str]) -> dict[str, Any]:
     book_with_latest_file(book_id)
     clean_word = clean_vocab_word(word)
-    if not clean_word:
+    lookup_terms = vocab_lookup_terms(word)
+    normalized_lookup = normalize_vocab_lookup_text(word)
+    if not clean_word and not lookup_terms:
         raise HTTPException(status_code=400, detail="word is required")
     with db.connect() as conn:
         item = conn.execute(
@@ -1978,13 +2337,23 @@ def lookup_book_word(book_id: str, word: str, sentence_id: Optional[str]) -> dic
             FROM reader.book_vocab_items bvi
             {glossary_lateral_sql()}
             {dictionary_lateral_sql()}
-            WHERE bvi.book_id = %s AND (lower(bvi.surface) = %s OR lower(bvi.lemma) = %s)
+            WHERE bvi.book_id = %s AND (
+              lower(bvi.surface) = ANY(%s::text[])
+              OR lower(coalesce(bvi.lemma, '')) = ANY(%s::text[])
+              OR regexp_replace(lower(bvi.surface), '[^a-z]', '', 'g') = %s
+              OR regexp_replace(lower(coalesce(bvi.lemma, '')), '[^a-z]', '', 'g') = %s
+            )
+              AND bvi.status <> 'ignored'
             ORDER BY bvi.score DESC, bvi.occurrence_count DESC
             LIMIT 1
             """,
-            (book_id, clean_word, clean_word),
+            (book_id, lookup_terms, lookup_terms, clean_word, clean_word),
         ).fetchone()
-        if not item:
+        domain_item = None
+        lifestudy_enabled = book_lifestudy_domain_enabled(conn, book_id)
+        if lifestudy_enabled:
+            domain_item = find_domain_glossary_entry(conn, book_id, lookup_terms, clean_word)
+        if not item and not domain_item and len(normalized_lookup.split()) <= 1:
             dictionary = find_dictionary_entry(conn, clean_word)
             if dictionary:
                 vocab_id = ensure_dictionary_vocab_item(conn, book_id, clean_word, dictionary)
@@ -1994,30 +2363,46 @@ def lookup_book_word(book_id: str, word: str, sentence_id: Optional[str]) -> dic
         if item:
             item_dict = dict(item)
             item_payload = item_dict if "context_meaning_zh" in item_dict else vocab_row(item_dict)
+            if domain_item:
+                current_source = str(item_payload.get("meaning_source") or "")
+                current_meaning = str(item_payload.get("context_meaning_zh") or "")
+                current_alignment = str(item_payload.get("alignment_status") or "")
+                should_prefer_lifestudy = (
+                    not current_meaning
+                    or current_source in {"none", "dictionary_fallback"}
+                    or current_alignment == "dictionary_fallback"
+                )
+                if should_prefer_lifestudy:
+                    item_payload = domain_item
+                    occurrence_rows = []
+                    item = None
             meaning = str(item_payload.get("context_meaning_zh") or "")
             meaning_like = f"%{meaning}%"
-            item_surface = str(item_dict.get("surface") or "")
-            item_lemma = str(item_dict.get("lemma") or item_surface)
-            occurrence_rows = conn.execute(
-                """
-                SELECT *
-                FROM reader.book_word_occurrences
-                WHERE book_id = %s AND (lower(surface) = lower(%s) OR lower(lemma) = lower(%s))
-                ORDER BY
-                  CASE WHEN %s <> '' AND chinese_sentence LIKE %s THEN 0 ELSE 1 END,
-                  CASE
-                    WHEN chapter_locator LIKE '%%-day%%' THEN 0
-                    WHEN chapter_locator LIKE '%%-outline%%' THEN 1
-                    WHEN chapter_locator LIKE '%%front-%%' THEN 2
-                    ELSE 1
-                  END,
-                  CASE WHEN chinese_sentence IS NULL OR chinese_sentence = '' THEN 1 ELSE 0 END,
-                  chapter_locator ASC,
-                  sentence_index ASC
-                LIMIT 32
-                """,
-                (book_id, item_surface, item_lemma, meaning, meaning_like),
-            ).fetchall()
+            if item:
+                item_surface = str(item_dict.get("surface") or "")
+                item_lemma = str(item_dict.get("lemma") or item_surface)
+                occurrence_rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM reader.book_word_occurrences
+                    WHERE book_id = %s AND (lower(surface) = lower(%s) OR lower(lemma) = lower(%s))
+                    ORDER BY
+                      CASE WHEN %s <> '' AND chinese_sentence LIKE %s THEN 0 ELSE 1 END,
+                      CASE
+                        WHEN chapter_locator LIKE '%%-day%%' THEN 0
+                        WHEN chapter_locator LIKE '%%-outline%%' THEN 1
+                        WHEN chapter_locator LIKE '%%front-%%' THEN 2
+                        ELSE 1
+                      END,
+                      CASE WHEN chinese_sentence IS NULL OR chinese_sentence = '' THEN 1 ELSE 0 END,
+                      chapter_locator ASC,
+                      sentence_index ASC
+                    LIMIT 32
+                    """,
+                    (book_id, item_surface, item_lemma, meaning, meaning_like),
+                ).fetchall()
+        elif domain_item:
+            item_payload = domain_item
     occurrences = []
     seen_occurrences: set[tuple[str, str]] = set()
     for row in occurrence_rows:
@@ -2035,8 +2420,9 @@ def lookup_book_word(book_id: str, word: str, sentence_id: Optional[str]) -> dic
         "book_id": book_id,
         "word": word,
         "normalized_word": clean_word,
+        "normalized_lookup": normalized_lookup,
         "sentence_id": sentence_id,
-        "found": item is not None,
+        "found": item_payload is not None,
         "item": item_payload,
         "occurrences": occurrences,
     }
@@ -3166,6 +3552,11 @@ def library_progress(position: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 def library_book_card(row: dict[str, Any]) -> dict[str, Any]:
     file_status = library_file_status(str(row.get("file_path") or ""))
+    metadata = row.get("library_metadata") or row.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    custom_category = str(metadata.get("custom_category") or "").strip()
+    tags = [str(tag).strip() for tag in (metadata.get("tags") or []) if str(tag).strip()]
     note_count = int(row.get("note_count") or 0)
     red_count = int(row.get("red_count") or 0)
     annotation_count = int(row.get("annotation_count") or 0)
@@ -3201,6 +3592,13 @@ def library_book_card(row: dict[str, Any]) -> dict[str, Any]:
         "progress": progress,
         "reading_state": library_reading_state(progress, row),
         "cover": library_cover_info(book_stub, file_status),
+        "organization": {
+            "favorite": bool(metadata.get("favorite") or False),
+            "author": row.get("author") or "未知作者",
+            "custom_category": custom_category,
+            "category": custom_category or "未分类",
+            "tags": tags,
+        },
         "counts": {
             "annotations": annotation_count,
             "notes": note_count,
@@ -3284,7 +3682,8 @@ def library_dashboard_payload(include_hidden: bool = False) -> dict[str, Any]:
                    COALESCE(counts.note_count, 0) AS note_count,
                    COALESCE(counts.red_count, 0) AS red_count,
                    COALESCE(audio.audio_note_count, 0) AS audio_note_count,
-                   COALESCE(ls.hidden, false) AS hidden
+                   COALESCE(ls.hidden, false) AS hidden,
+                   COALESCE(ls.metadata, '{}'::jsonb) AS library_metadata
             FROM reader.books b
             LEFT JOIN LATERAL (
                 SELECT file_path, file_kind, file_hash, byte_size
@@ -3313,13 +3712,29 @@ def library_dashboard_payload(include_hidden: bool = False) -> dict[str, Any]:
             (include_hidden,),
         ).fetchall()
     books = [library_book_card(jsonable(dict(row))) for row in rows]
-    current = books[0] if books else None
     visible_books = [book for book in books if not book["status"]["hidden"]]
+    hidden_books = [book for book in books if book["status"]["hidden"]]
+    current = visible_books[0] if visible_books else None
     recent_annotations = library_recent_annotations()
     recent_notes = [item for item in recent_annotations if item.get("kind") == "note"][:20]
     recent_red = [item for item in recent_annotations if item.get("kind") == "red_highlight"][:20]
     total_notes = sum(book["counts"]["notes"] for book in visible_books)
     total_red = sum(book["counts"]["red_highlights"] for book in visible_books)
+    favorite_books = [book for book in visible_books if book.get("organization", {}).get("favorite")]
+    authors: dict[str, list[dict[str, Any]]] = {}
+    categories: dict[str, list[dict[str, Any]]] = {}
+    for book in visible_books:
+        org = book.get("organization") or {}
+        authors.setdefault(str(org.get("author") or "未知作者"), []).append(book)
+        categories.setdefault(str(org.get("category") or "未分类"), []).append(book)
+    author_groups = [
+        {"author": name, "count": len(items), "books": items}
+        for name, items in sorted(authors.items(), key=lambda pair: (-len(pair[1]), pair[0]))
+    ]
+    category_groups = [
+        {"category": name, "count": len(items), "books": items}
+        for name, items in sorted(categories.items(), key=lambda pair: (pair[0] == "未分类", pair[0]))
+    ]
     return {
         "ok": True,
         "schema": "sentence_reader.library_dashboard.v1",
@@ -3337,16 +3752,27 @@ def library_dashboard_payload(include_hidden: bool = False) -> dict[str, Any]:
             "red_highlight_count": total_red,
             "annotation_count": total_notes + total_red,
             "hidden_count": sum(1 for book in books if book["status"]["hidden"]),
+            "favorite_count": len(favorite_books),
+            "author_count": len(author_groups),
+            "category_count": len([group for group in category_groups if group["category"] != "未分类"]),
         },
         "current_book": current,
         "books": visible_books,
+        "hidden_books": hidden_books,
         "recent_books": visible_books[:6],
+        "favorite_books": favorite_books,
+        "author_groups": author_groups,
+        "category_groups": category_groups,
         "recent_annotations": recent_annotations,
         "recent_notes": recent_notes,
         "recent_red_highlights": recent_red,
         "navigation": [
             {"id": "home", "title": "首页"},
             {"id": "library", "title": "书库"},
+            {"id": "favorites", "title": "收藏"},
+            {"id": "authors", "title": "作者"},
+            {"id": "categories", "title": "分类"},
+            {"id": "vocab", "title": "单词"},
             {"id": "notes", "title": "笔记"},
             {"id": "red", "title": "红标"},
             {"id": "settings", "title": "设置"},
@@ -3438,6 +3864,14 @@ def import_library_epub(payload: LibraryImport) -> dict[str, Any]:
 
 
 def hide_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
+    return set_library_books_hidden(book_ids, hidden=True, source=source)
+
+
+def restore_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
+    return set_library_books_hidden(book_ids, hidden=False, source=source)
+
+
+def set_library_books_hidden(book_ids: list[str], *, hidden: bool, source: str) -> dict[str, Any]:
     unique_ids: list[str] = []
     seen: set[str] = set()
     for raw_id in book_ids:
@@ -3463,9 +3897,9 @@ def hide_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
             row = conn.execute(
                 """
                 INSERT INTO reader.library_state (book_id, hidden, source, metadata, created_at, updated_at)
-                VALUES (%s, true, %s, %s, now(), now())
+                VALUES (%s, %s, %s, %s, now(), now())
                 ON CONFLICT (book_id) DO UPDATE
-                SET hidden = true,
+                SET hidden = EXCLUDED.hidden,
                     source = EXCLUDED.source,
                     metadata = reader.library_state.metadata || EXCLUDED.metadata,
                     updated_at = now()
@@ -3473,6 +3907,7 @@ def hide_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
                 """,
                 (
                     book_id,
+                    hidden,
                     source,
                     db.jsonb(
                         {
@@ -3487,14 +3922,101 @@ def hide_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
             ).fetchone()
             hidden_rows.append(jsonable(dict(row)))
 
+    schema = "sentence_reader.library_hide.v1" if hidden else "sentence_reader.library_restore.v1"
     return {
         "ok": True,
-        "schema": "sentence_reader.library_hide.v1",
+        "schema": schema,
         "book_ids": unique_ids,
-        "hidden_count": len(hidden_rows),
+        "affected_count": len(hidden_rows),
+        "hidden_count": len(hidden_rows) if hidden else 0,
+        "restored_count": len(hidden_rows) if not hidden else 0,
         "non_destructive": True,
-        "hidden": True,
+        "hidden": hidden,
         "library_states": hidden_rows,
+    }
+
+
+def update_library_book_organization(book_id: str, payload: LibraryOrganizationPatch) -> dict[str, Any]:
+    book = book_with_latest_file(book_id)
+    with db.connect() as conn:
+        current = conn.execute(
+            "SELECT metadata FROM reader.library_state WHERE book_id = %s",
+            (book_id,),
+        ).fetchone()
+        metadata = dict((current or {}).get("metadata") or {})
+        if payload.favorite is not None:
+            metadata["favorite"] = bool(payload.favorite)
+        if payload.custom_category is not None:
+            category = re.sub(r"\s+", " ", payload.custom_category).strip()
+            if category:
+                metadata["custom_category"] = category[:48]
+            else:
+                metadata.pop("custom_category", None)
+        if payload.tags is not None:
+            tags = []
+            seen_tags: set[str] = set()
+            for raw_tag in payload.tags:
+                tag = re.sub(r"\s+", " ", str(raw_tag or "")).strip()
+                if tag and tag not in seen_tags:
+                    tags.append(tag[:32])
+                    seen_tags.add(tag)
+            if tags:
+                metadata["tags"] = tags[:12]
+            else:
+                metadata.pop("tags", None)
+        row = conn.execute(
+            """
+            INSERT INTO reader.library_state (book_id, hidden, source, metadata, created_at, updated_at)
+            VALUES (%s, false, %s, %s, now(), now())
+            ON CONFLICT (book_id) DO UPDATE
+            SET metadata = EXCLUDED.metadata,
+                source = EXCLUDED.source,
+                hidden = reader.library_state.hidden,
+                updated_at = now()
+            RETURNING *
+            """,
+            (book_id, "library_web_organization", db.jsonb(metadata)),
+        ).fetchone()
+    return {
+        "ok": True,
+        "schema": "sentence_reader.library_organization.v1",
+        "book_id": book_id,
+        "book": jsonable(dict(book)),
+        "library_state": jsonable(dict(row)),
+        "organization": {
+            "favorite": bool(metadata.get("favorite") or False),
+            "custom_category": metadata.get("custom_category") or "",
+            "category": metadata.get("custom_category") or "未分类",
+            "tags": metadata.get("tags") or [],
+        },
+    }
+
+
+def update_library_books_organization(payload: LibraryBatchOrganizationPatch) -> dict[str, Any]:
+    unique_ids: list[str] = []
+    seen: set[str] = set()
+    for raw_id in payload.book_ids:
+        book_id = str(raw_id or "").strip()
+        if book_id and book_id not in seen:
+            unique_ids.append(book_id)
+            seen.add(book_id)
+    if not unique_ids:
+        raise HTTPException(status_code=422, detail="book_ids is empty")
+    if payload.favorite is None and payload.custom_category is None and payload.tags is None:
+        raise HTTPException(status_code=422, detail="organization patch is empty")
+
+    patch = LibraryOrganizationPatch(
+        favorite=payload.favorite,
+        custom_category=payload.custom_category,
+        tags=payload.tags,
+    )
+    results = [update_library_book_organization(book_id, patch) for book_id in unique_ids]
+    return {
+        "ok": True,
+        "schema": "sentence_reader.library_batch_organization.v1",
+        "book_ids": unique_ids,
+        "affected_count": len(results),
+        "results": results,
     }
 
 
@@ -3504,7 +4026,7 @@ def library_page_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Sentence Reader Library</title>
+  <title>Click Reader Library</title>
   <style>
     :root { color-scheme: dark; --bg:#090b10; --panel:#11151d; --panel-2:#171c26; --line:#283142; --text:#f5f7fb; --muted:#9ca8ba; --blue:#4f8cff; --green:#28c76f; --red:#ff5f57; --amber:#ffb020; }
     * { box-sizing:border-box; }
@@ -3583,7 +4105,7 @@ def library_page_html() -> str:
 <body>
   <div class="app" data-ui-style="tabler-inspired" data-structure-reference="komga-style-library">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">SR</div><div><strong>Sentence Reader</strong><span>本地书库</span></div></div>
+      <div class="brand"><div class="brand-mark">CR</div><div><strong>Click Reader</strong><span>本地书库</span></div></div>
       <nav class="nav" id="nav"></nav>
       <div class="drop">
         <strong>导入 EPUB</strong>
@@ -3808,39 +4330,39 @@ def library_page_html_v2() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Sentence Reader Library V2</title>
+  <title>Click Reader Library</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg:#080806; --surface:#11120f; --panel:#171813; --panel-2:#202018;
-      --line:#34362b; --text:#f7f3e8; --muted:#a9a491; --soft:#d8cfb4;
-      --accent:#d7a84f; --teal:#6db7a8; --coral:#d9856a; --green:#87b67a; --danger:#e9786b;
-      --shadow:0 24px 80px rgba(0,0,0,.38);
+      --bg:#070806; --surface:#0f110d; --panel:#151711; --panel-2:#20231a;
+      --line:#323829; --text:#f7f2e7; --muted:#a9a995; --soft:#ddd4b7;
+      --accent:#e4b453; --jade:#79b88b; --cyan:#7db9c4; --coral:#d9856a; --green:#8fbe7a; --danger:#e9786b;
+      --shadow:0 28px 90px rgba(0,0,0,.42);
     }
     * { box-sizing:border-box; }
-    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--text); font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+    html, body { margin:0; min-height:100%; background:linear-gradient(180deg,#0b0c08 0,#070806 46%,#050604 100%); color:var(--text); font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
     body { overflow-x:hidden; }
     button, input, select { font:inherit; }
-    button { border:0; border-radius:8px; background:var(--panel-2); color:var(--text); padding:9px 12px; cursor:pointer; }
-    button:hover { background:#2a2a21; }
-    button.primary { background:var(--accent); color:#17120a; font-weight:700; }
+    button { border:0; border-radius:8px; background:var(--panel-2); color:var(--text); padding:9px 12px; cursor:pointer; min-height:38px; }
+    button:hover { background:#2a2f23; }
+    button.primary { background:linear-gradient(135deg,var(--accent),#f0cf75); color:#17120a; font-weight:800; }
     button.ghost { background:transparent; color:var(--soft); }
     button.subtle { background:#15160f; border:1px solid var(--line); color:var(--soft); }
     button.danger { background:rgba(233,120,107,.12); color:#ffb5aa; border:1px solid rgba(233,120,107,.35); }
     button:disabled { opacity:.46; cursor:default; }
     input, select { width:100%; border:1px solid var(--line); background:#10110c; color:var(--text); border-radius:8px; padding:10px 12px; outline:none; }
     input:focus, select:focus { border-color:rgba(215,168,79,.75); box-shadow:0 0 0 3px rgba(215,168,79,.12); }
-    .app-shell { min-height:100vh; display:grid; grid-template-columns:214px minmax(0,1fr); }
-    .sidebar { border-right:1px solid var(--line); background:#0d0e0a; padding:20px 14px; position:sticky; top:0; height:100vh; }
+    .app-shell { min-height:100vh; display:grid; grid-template-columns:232px minmax(0,1fr); }
+    .sidebar { border-right:1px solid var(--line); background:linear-gradient(180deg,#11130d,#090a07); padding:22px 15px; position:sticky; top:0; height:100vh; }
     .brand { display:flex; gap:11px; align-items:center; margin-bottom:22px; }
-    .brand-mark { width:38px; height:38px; border-radius:10px; background:linear-gradient(145deg,var(--accent),var(--teal)); display:grid; place-items:center; color:#17120a; font-weight:900; }
+    .brand-mark { width:38px; height:38px; border-radius:10px; background:linear-gradient(145deg,var(--accent),var(--jade)); display:grid; place-items:center; color:#17120a; font-weight:900; box-shadow:0 10px 30px rgba(228,180,83,.22); }
     .brand strong { display:block; font-size:15px; }
     .brand span { color:var(--muted); font-size:12px; }
     .nav { display:grid; gap:7px; }
     .nav button { width:100%; display:flex; align-items:center; justify-content:space-between; background:transparent; color:var(--soft); text-align:left; }
-    .nav button.active { background:#202015; color:var(--text); }
+    .nav button.active { background:#222719; color:var(--text); box-shadow:inset 3px 0 0 var(--accent); }
     .side-action { margin-top:18px; display:grid; gap:8px; }
-    .main { min-width:0; padding:20px 24px 38px; }
+    .main { min-width:0; padding:22px 28px 42px; }
     .topbar { display:grid; grid-template-columns:minmax(260px,1fr) auto auto auto; gap:10px; align-items:center; margin-bottom:18px; }
     .status-pill { display:inline-flex; align-items:center; gap:7px; color:#cfe6c7; background:rgba(135,182,122,.12); border:1px solid rgba(135,182,122,.28); border-radius:999px; padding:8px 11px; font-size:12px; }
     .status-dot { width:7px; height:7px; border-radius:50%; background:var(--green); }
@@ -3851,31 +4373,42 @@ def library_page_html_v2() -> str:
     .section-head h1 { font-size:25px; }
     .section-head h2 { font-size:18px; }
     .section-head p { margin:5px 0 0; color:var(--muted); font-size:13px; }
-    .continue-hero { min-height:268px; border:1px solid var(--line); border-radius:12px; background:linear-gradient(135deg,#181a12,#10110c 70%); display:grid; grid-template-columns:180px minmax(0,1fr); gap:22px; padding:22px; box-shadow:var(--shadow); }
-    .hero-copy { min-width:0; display:flex; flex-direction:column; justify-content:center; }
-    .eyebrow { color:var(--accent); font-size:12px; letter-spacing:1px; text-transform:uppercase; font-weight:800; }
-    .hero-title { font-size:32px; line-height:1.18; margin:8px 0 6px; word-break:break-word; }
+    .continue-hero { min-height:380px; border:1px solid rgba(228,180,83,.22); border-radius:8px; background:radial-gradient(circle at 18% 15%,rgba(228,180,83,.16),transparent 28%),radial-gradient(circle at 82% 28%,rgba(125,185,196,.12),transparent 30%),linear-gradient(135deg,#171a10,#0d100b 62%,#050604); display:grid; grid-template-columns:minmax(210px,270px) minmax(0,1fr); gap:30px; padding:28px; box-shadow:var(--shadow); overflow:hidden; }
+    .hero-copy { min-width:0; display:flex; flex-direction:column; justify-content:center; max-width:780px; }
+    .eyebrow { color:var(--accent); font-size:12px; letter-spacing:1px; text-transform:uppercase; font-weight:900; }
+    .hero-title { font-size:38px; line-height:1.13; margin:10px 0 8px; word-break:break-word; max-width:760px; }
     .hero-meta { color:var(--muted); font-size:14px; }
     .hero-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
-    .cover-frame { position:relative; width:100%; aspect-ratio:3/4; border-radius:11px; overflow:hidden; background:#1d1d16; border:1px solid rgba(255,255,255,.08); box-shadow:0 18px 44px rgba(0,0,0,.42); }
+    .hero-manifest { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:20px; }
+    .manifest-item { border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); border-radius:8px; padding:10px 11px; min-width:0; }
+    .manifest-item strong { display:block; font-size:15px; line-height:1.25; color:var(--text); }
+    .manifest-item span { display:block; margin-top:4px; color:var(--muted); font-size:12px; line-height:1.35; }
+    .cover-frame { position:relative; width:100%; aspect-ratio:3/4; border-radius:8px; overflow:hidden; background:#171914; border:1px solid rgba(255,255,255,.09); box-shadow:0 22px 58px rgba(0,0,0,.48); }
     .cover-frame img { width:100%; height:100%; object-fit:cover; display:block; }
+    .cover-frame.hero-cover { align-self:center; min-height:300px; }
+    .cover-frame.hero-cover::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.02) 25%,rgba(0,0,0,.42) 100%); pointer-events:none; }
     .cover-frame.small { width:92px; flex:0 0 92px; }
+    .cover-phrases { position:absolute; z-index:2; left:14px; right:14px; bottom:14px; display:grid; gap:7px; }
+    .cover-phrases span { display:block; border:1px solid rgba(255,255,255,.16); background:rgba(7,8,6,.68); color:#f9f2dc; border-radius:999px; padding:7px 10px; font-size:13px; line-height:1.1; font-weight:900; text-align:center; backdrop-filter:blur(8px); }
+    .cover-phrases span:nth-child(2) { color:#cceee0; }
+    .cover-phrases span:nth-child(3) { color:#f6d28a; }
     .progress { height:8px; background:#2a2b22; border-radius:999px; overflow:hidden; margin-top:16px; }
     .progress i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); width:0; }
     .rail { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(150px, 190px); gap:12px; overflow:auto; padding-bottom:4px; }
     .book-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; }
-    .book-card { position:relative; min-width:0; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; transition:transform .12s ease, border-color .12s ease, background .12s ease; }
+    .book-card { position:relative; min-width:0; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; transition:transform .12s ease, border-color .12s ease, background .12s ease; }
     .book-card:hover, .book-card:focus { transform:translateY(-2px); border-color:rgba(215,168,79,.62); background:#1c1d16; outline:none; }
     .book-card .cover-frame { margin-bottom:10px; }
     .book-title { font-weight:800; line-height:1.32; min-height:39px; word-break:break-word; }
     .book-meta { color:var(--muted); font-size:12px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .book-row { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
     .badge { font-size:11px; color:var(--soft); border:1px solid var(--line); border-radius:999px; padding:3px 7px; background:#11120f; }
-    .badge.state { color:#11120f; background:var(--teal); border-color:var(--teal); font-weight:800; }
+    .badge.state { color:#11120f; background:var(--jade); border-color:var(--jade); font-weight:800; }
     .badge.red { color:#ffc1b7; border-color:rgba(217,133,106,.4); }
-    .card-check { position:absolute; z-index:2; left:12px; top:12px; width:18px; height:18px; accent-color:var(--accent); }
-    .card-actions { position:absolute; z-index:2; right:12px; top:12px; display:flex; gap:6px; }
-    .card-action { padding:4px 8px; background:rgba(0,0,0,.54); border:1px solid rgba(255,255,255,.12); }
+    .card-check { position:absolute; z-index:4; left:12px; top:12px; width:18px; height:18px; accent-color:var(--accent); }
+    .card-actions { position:absolute; z-index:2; right:12px; top:12px; display:flex; gap:6px; opacity:0; transform:translateY(-4px); pointer-events:none; transition:opacity .14s ease, transform .14s ease; }
+    .book-card:hover .card-actions, .book-card:focus-within .card-actions { opacity:1; transform:translateY(0); pointer-events:auto; }
+    .card-action { padding:4px 8px; min-height:28px; background:rgba(0,0,0,.54); border:1px solid rgba(255,255,255,.12); }
     .card-action.danger { background:rgba(233,120,107,.22); border-color:rgba(233,120,107,.48); color:#ffd0ca; }
     .toolbar { display:grid; grid-template-columns:minmax(180px,1fr) 140px 140px auto auto; gap:10px; margin-bottom:14px; align-items:center; }
     .batchbar { display:none; align-items:center; justify-content:space-between; gap:10px; border:1px solid rgba(215,168,79,.3); background:rgba(215,168,79,.09); border-radius:10px; padding:10px 12px; margin-bottom:12px; }
@@ -3884,6 +4417,13 @@ def library_page_html_v2() -> str:
     .asset-card { border:1px solid var(--line); background:var(--panel); border-radius:10px; padding:13px; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; }
     .asset-card strong { display:block; margin-bottom:5px; }
     .asset-card p { margin:0; color:var(--soft); line-height:1.55; }
+    .group-list { display:grid; gap:18px; }
+    .group-panel { border:1px solid var(--line); background:rgba(255,255,255,.025); border-radius:8px; padding:14px; }
+    .group-panel h2 { margin:0 0 12px; font-size:18px; display:flex; justify-content:space-between; gap:10px; }
+    .favorite-mark { position:absolute; z-index:2; left:38px; top:12px; min-width:24px; height:24px; border-radius:999px; display:grid; place-items:center; color:#1a1408; background:var(--accent); font-weight:900; box-shadow:0 8px 24px rgba(0,0,0,.32); }
+    .org-panel { border:1px solid rgba(228,180,83,.22); background:rgba(228,180,83,.055); border-radius:8px; padding:12px; margin-top:12px; display:grid; gap:9px; }
+    .org-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; }
+    .org-tags { display:flex; flex-wrap:wrap; gap:6px; }
     .empty, .error-box { border:1px dashed #545541; background:#12130e; border-radius:12px; padding:22px; color:var(--soft); }
     .drawer-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .15s ease; z-index:30; }
     .drawer { position:fixed; right:0; top:0; bottom:0; width:min(430px, 92vw); background:#10110c; border-left:1px solid var(--line); transform:translateX(104%); transition:transform .18s ease; z-index:31; padding:18px; overflow:auto; box-shadow:var(--shadow); }
@@ -3894,21 +4434,38 @@ def library_page_html_v2() -> str:
     .drawer-actions .primary { grid-column:1 / -1; }
     details { border:1px solid var(--line); border-radius:8px; padding:10px; color:var(--muted); }
     details summary { color:var(--soft); cursor:pointer; }
-    .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d1e17; border:1px solid #4d4c36; padding:10px 14px; border-radius:9px; opacity:0; pointer-events:none; transition:opacity .16s ease; z-index:50; }
-    .toast.show { opacity:1; }
+    .modal-backdrop { position:fixed; inset:0; z-index:45; display:none; place-items:center; padding:18px; background:rgba(0,0,0,.58); }
+    .modal-backdrop.show { display:grid; }
+    .modal { width:min(520px,100%); border:1px solid rgba(233,120,107,.32); border-radius:10px; background:#11130e; box-shadow:var(--shadow); padding:18px; }
+    .modal h2 { margin:0 0 8px; font-size:20px; }
+    .modal p { margin:0 0 12px; color:var(--soft); line-height:1.55; }
+    .modal ul { margin:0 0 16px; padding-left:18px; color:var(--muted); line-height:1.65; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+    .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#1d1e17; border:1px solid #4d4c36; padding:10px 14px; border-radius:9px; opacity:0; pointer-events:none; transition:opacity .16s ease; z-index:50; display:flex; align-items:center; gap:12px; max-width:min(92vw,620px); }
+    .toast.show { opacity:1; pointer-events:auto; }
+    .toast button { min-height:30px; padding:5px 9px; }
     @media (max-width: 980px) {
       .app-shell { grid-template-columns:1fr; }
       .sidebar { position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); }
       .nav { grid-template-columns:repeat(5,minmax(0,1fr)); }
       .topbar, .toolbar { grid-template-columns:1fr 1fr; }
-      .continue-hero { grid-template-columns:130px minmax(0,1fr); }
+      .continue-hero { grid-template-columns:160px minmax(0,1fr); }
+      .hero-title { font-size:32px; }
+      .hero-manifest { grid-template-columns:1fr; }
     }
     @media (max-width: 640px) {
       .main { padding:14px 12px 24px; }
       .nav { grid-template-columns:1fr 1fr; }
       .topbar, .toolbar { grid-template-columns:1fr; }
-      .continue-hero { grid-template-columns:1fr; }
-      .continue-hero .cover-frame { max-width:150px; }
+      .continue-hero { grid-template-columns:1fr; padding:18px; gap:18px; }
+      .continue-hero .cover-frame { max-width:190px; min-height:252px; }
+      .hero-title { font-size:28px; }
+      .hero-manifest { grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:14px; }
+      .manifest-item { padding:8px 6px; text-align:center; }
+      .manifest-item strong { font-size:13px; }
+      .manifest-item span { display:none; }
+      .card-actions { position:static; opacity:1; transform:none; pointer-events:auto; margin:0 0 8px; justify-content:space-between; }
+      .card-action { flex:1 1 0; padding:4px 6px; }
       .book-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
   </style>
@@ -3916,7 +4473,7 @@ def library_page_html_v2() -> str:
 <body>
   <div class="app-shell" data-library-v2="true" data-native-reader-contract="sentence-reader://open-native">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">SR</div><div><strong>Sentence Reader</strong><span>本地读书</span></div></div>
+      <div class="brand"><div class="brand-mark">CR</div><div><strong>Click Reader</strong><span>点击读懂</span></div></div>
       <nav class="nav" id="nav"></nav>
       <div class="side-action">
         <button class="primary" id="sideImport">导入 EPUB</button>
@@ -3925,14 +4482,14 @@ def library_page_html_v2() -> str:
     </aside>
     <main class="main">
       <div class="topbar">
-        <input id="search" placeholder="搜索书名、作者、笔记、红标">
+        <input id="search" placeholder="搜索书名、作者、分类、标签、笔记、红标">
         <span class="status-pill"><i class="status-dot"></i><span id="serviceStatus">正在连接</span></span>
         <button class="subtle" id="refresh">刷新</button>
         <button class="primary" id="topImport">导入</button>
       </div>
 
       <section id="homeView" class="view active" data-product-home="true">
-        <div class="section-head"><div><h1>继续阅读</h1><p>回到上次停下来的地方。</p></div></div>
+        <div class="section-head"><div><h1>继续阅读</h1><p>封面、原句、单词本在同一个工作台里。</p></div></div>
         <section id="continueHero" class="continue-hero"></section>
         <div class="section-head"><div><h2>最近阅读</h2><p>点击封面直接进入正文。</p></div><button class="ghost" data-view-jump="library">全部书籍</button></div>
         <section id="recentRail" class="rail"></section>
@@ -3960,8 +4517,23 @@ def library_page_html_v2() -> str:
           <button class="subtle" id="selectAll">全选当前</button>
           <button class="primary" id="libraryImport">导入</button>
         </div>
-        <div id="batchbar" class="batchbar"><span id="batchCount">已选择 0 本</span><span><button class="subtle" id="batchClear">清空选择</button> <button class="subtle" id="batchExport">批量导出</button> <button class="danger" id="batchHide">批量移出书库</button></span></div>
+        <div id="batchbar" class="batchbar"><span id="batchCount">已选择 0 本</span><span><button class="subtle" id="batchClear">清空选择</button> <button class="subtle" id="batchFavorite">批量收藏</button> <button class="subtle" id="batchOrganize">批量分类</button> <button class="subtle" id="batchExport">批量导出</button> <button class="danger" id="batchHide">批量移出书库</button></span></div>
         <section id="bookGrid" class="book-grid"></section>
+      </section>
+
+      <section id="favoritesView" class="view">
+        <div class="section-head"><div><h1>收藏</h1><p>这里放你主动判定值得反复读的书。</p></div><small id="favoriteCount"></small></div>
+        <section id="favoriteGrid" class="book-grid"></section>
+      </section>
+
+      <section id="authorsView" class="view">
+        <div class="section-head"><div><h1>作者</h1><p>按作者聚合，适合追踪一个人的思想系统。</p></div><small id="authorCount"></small></div>
+        <section id="authorGroups" class="group-list"></section>
+      </section>
+
+      <section id="categoriesView" class="view">
+        <div class="section-head"><div><h1>分类</h1><p>按你自己的书架逻辑组织，不被文件名牵着走。</p></div><small id="categoryCount"></small></div>
+        <section id="categoryGroups" class="group-list"></section>
       </section>
 
       <section id="notesView" class="view">
@@ -3982,15 +4554,24 @@ def library_page_html_v2() -> str:
   </div>
   <div id="drawerBackdrop" class="drawer-backdrop"></div>
   <aside id="drawer" class="drawer" aria-hidden="true"></aside>
+  <div id="removeModal" class="modal-backdrop" aria-hidden="true"></div>
+  <div id="orgModal" class="modal-backdrop" aria-hidden="true"></div>
   <input id="fileInput" type="file" accept=".epub,application/epub+zip" hidden>
   <div id="toast" class="toast"></div>
   <script>
-    const state = { dashboard:null, books:[], assets:[], view:'home', query:'', sort:'recent', stateFilter:'all', selectedBook:null, activeBookId:null, selectedIds:new Set(), lastImport:null, error:null };
+    const state = { dashboard:null, books:[], hiddenBooks:[], assets:[], view:'home', query:'', sort:'recent', stateFilter:'all', selectedBook:null, activeBookId:null, selectedIds:new Set(), pendingRemove:null, lastRemoved:null, lastImport:null, error:null };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const isMacAppSurface = () => new URLSearchParams(window.location.search).get('surface') === 'mac-app';
-    const byId = (id) => state.books.find((book) => book.id === id);
-    function toast(text) { const node = $('toast'); node.textContent = text; node.classList.add('show'); setTimeout(() => node.classList.remove('show'), 2600); }
+    const byId = (id) => state.books.find((book) => book.id === id) || state.hiddenBooks.find((book) => book.id === id);
+    function toast(text, actionLabel = '', action = null) {
+      const node = $('toast');
+      node.innerHTML = `<span>${esc(text)}</span>${actionLabel ? `<button class="subtle" id="toastAction">${esc(actionLabel)}</button>` : ''}`;
+      node.classList.add('show');
+      if (actionLabel && action) $('toastAction').onclick = action;
+      clearTimeout(state.toastTimer);
+      state.toastTimer = setTimeout(() => node.classList.remove('show'), actionLabel ? 6200 : 2600);
+    }
     async function api(url, options) {
       const response = await fetch(url, options);
       if (!response.ok) throw new Error(await response.text());
@@ -4001,6 +4582,9 @@ def library_page_html_v2() -> str:
       return [
         ['home','首页',''],
         ['library','书库', summary.book_count || 0],
+        ['favorites','收藏', summary.favorite_count || 0],
+        ['authors','作者', summary.author_count || 0],
+        ['categories','分类', summary.category_count || 0],
         ['vocab','单词',''],
         ['notes','笔记', summary.note_count || 0],
         ['red','红标', summary.red_highlight_count || 0],
@@ -4030,7 +4614,8 @@ def library_page_html_v2() -> str:
       const query = (state.query || '').trim().toLowerCase();
       if (state.stateFilter !== 'all' && book.reading_state !== state.stateFilter) return false;
       if (!query) return true;
-      const haystack = [book.title, book.author, book.file?.file_path, book.reading_state, bookAssetText(book)].join(' ').toLowerCase();
+      const org = book.organization || {};
+      const haystack = [book.title, book.author, org.category, org.tags?.join(' '), book.file?.file_path, book.reading_state, bookAssetText(book)].join(' ').toLowerCase();
       return haystack.includes(query);
     }
     function sortedBooks(source = state.books) {
@@ -4042,6 +4627,12 @@ def library_page_html_v2() -> str:
         return String(b.recent_activity_at || '').localeCompare(String(a.recent_activity_at || ''));
       });
       return books;
+    }
+    function filteredGroups(groups, key) {
+      return groups.map((group) => {
+        const books = sortedBooks(group.books || []);
+        return {title: group[key] || '未分类', count: books.length, books};
+      }).filter((group) => group.count > 0);
     }
     function progressText(book) { return `${book.progress?.percent || 0}%`; }
     function chapterText(book) {
@@ -4057,23 +4648,28 @@ def library_page_html_v2() -> str:
       }
       if (book.actions?.continue_reading_url) window.location.href = book.actions.continue_reading_url;
     }
-    function cover(book, cls='') {
-      return `<div class="cover-frame ${cls}"><img src="${esc(book.cover?.url || '')}" alt="${esc(book.title || '书籍封面')}" loading="lazy"></div>`;
+    function cover(book, cls='', showPhrases=false) {
+      const phrases = showPhrases ? '<div class="cover-phrases"><span>逐句读懂</span><span>语境查词</span><span>复习沉淀</span></div>' : '';
+      return `<div class="cover-frame ${cls}"><img src="${esc(book.cover?.url || '')}" alt="${esc(book.title || '书籍封面')}" loading="lazy">${phrases}</div>`;
     }
     function bookCard(book) {
       const checked = state.selectedIds.has(book.id) ? 'checked' : '';
+      const org = book.organization || {};
+      const favorite = org.favorite ? '<div class="favorite-mark" title="已收藏">★</div>' : '';
+      const favoriteLabel = org.favorite ? '取消收藏' : '收藏';
       return `<article class="book-card" tabindex="0" data-book="${esc(book.id)}" data-open-book-card="true">
         <input class="card-check" type="checkbox" data-select="${esc(book.id)}" ${checked} aria-label="选择书籍">
+        ${favorite}
         <div class="card-actions">
+          <button class="card-action" data-favorite="${esc(book.id)}">${favoriteLabel}</button>
           <button class="card-action" data-vocab="${esc(book.id)}">单词</button>
           <button class="card-action" data-details="${esc(book.id)}">详情</button>
-          <button class="card-action danger" data-hide-book="${esc(book.id)}">移除</button>
         </div>
         ${cover(book)}
         <div class="book-title">${esc(book.title || book.id)}</div>
         <div class="book-meta">${esc(book.author || '未知作者')}</div>
         <div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div>
-        <div class="book-row"><span class="badge state">${esc(book.reading_state || '未开始')}</span><span class="badge">${progressText(book)}</span><span class="badge">${book.counts?.notes || 0} 笔记</span><span class="badge red">${book.counts?.red_highlights || 0} 红标</span></div>
+        <div class="book-row"><span class="badge state">${esc(book.reading_state || '未开始')}</span><span class="badge">${progressText(book)}</span><span class="badge">${esc(org.category || '未分类')}</span><span class="badge">${book.counts?.notes || 0} 笔记</span><span class="badge red">${book.counts?.red_highlights || 0} 红标</span></div>
       </article>`;
     }
     function bindBookCards() {
@@ -4091,14 +4687,51 @@ def library_page_html_v2() -> str:
         window.location.href = vocabURL(button.dataset.vocab);
       });
       document.querySelectorAll('[data-details]').forEach((button) => button.onclick = () => openDrawer(byId(button.dataset.details)));
-      document.querySelectorAll('[data-hide-book]').forEach((button) => button.onclick = (event) => {
+      document.querySelectorAll('[data-favorite]').forEach((button) => button.onclick = (event) => {
         event.stopPropagation();
-        hideSingleBook(byId(button.dataset.hideBook)).catch((error) => toast(`移除失败：${error.message}`));
+        const book = byId(button.dataset.favorite);
+        toggleFavorite(book).catch((error) => toast(`收藏失败：${error.message}`));
       });
       document.querySelectorAll('[data-select]').forEach((box) => box.onchange = () => {
         if (box.checked) state.selectedIds.add(box.dataset.select); else state.selectedIds.delete(box.dataset.select);
         renderBatchbar();
       });
+    }
+    async function updateBookOrganization(book, payload, message = '已更新') {
+      if (!book?.id) return;
+      await api(`/api/library/books/${book.id}/organization`, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      toast(message);
+      await loadDashboard();
+      const updated = byId(book.id);
+      if (state.selectedBook?.id === book.id && updated && $('drawer').classList.contains('open')) openDrawer(updated);
+    }
+    async function toggleFavorite(book) {
+      if (!book) return;
+      const next = !(book.organization?.favorite || false);
+      await updateBookOrganization(book, {favorite: next}, next ? '已收藏' : '已取消收藏');
+    }
+    function renderBookGroup(containerId, groups, emptyText) {
+      const container = $(containerId);
+      if (!groups.length) {
+        container.innerHTML = `<div class="empty">${esc(emptyText)}</div>`;
+        return;
+      }
+      container.innerHTML = groups.map((group) => `<section class="group-panel"><h2><span>${esc(group.title)}</span><span>${esc(group.count)} 本</span></h2><div class="book-grid">${group.books.map(bookCard).join('')}</div></section>`).join('');
+      bindBookCards();
+    }
+    function renderOrganizationViews() {
+      const favoriteBooks = sortedBooks(state.dashboard?.favorite_books || []);
+      $('favoriteCount').textContent = `${favoriteBooks.length} 本`;
+      $('favoriteGrid').innerHTML = favoriteBooks.length ? favoriteBooks.map(bookCard).join('') : `<div class="empty"><h2>还没有收藏</h2><p>在书卡或详情里点“收藏”，把最值得反复读的书放到这里。</p></div>`;
+      bindBookCards();
+
+      const authorGroups = filteredGroups(state.dashboard?.author_groups || [], 'author');
+      $('authorCount').textContent = `${authorGroups.length} 位作者`;
+      renderBookGroup('authorGroups', authorGroups, '还没有作者分组。');
+
+      const categoryGroups = filteredGroups(state.dashboard?.category_groups || [], 'category');
+      $('categoryCount').textContent = `${categoryGroups.length} 个分类`;
+      renderBookGroup('categoryGroups', categoryGroups, '还没有分类。');
     }
     function renderHome() {
       const current = state.dashboard?.current_book || state.books[0];
@@ -4106,7 +4739,7 @@ def library_page_html_v2() -> str:
         $('continueHero').innerHTML = `<div class="empty"><h2>先导入一本 EPUB</h2><p>导入后会复制到内部书库，原文件可以删除。</p><button class="primary" id="emptyImport">导入 EPUB</button></div>`;
         $('emptyImport').onclick = () => $('fileInput').click();
       } else {
-        $('continueHero').innerHTML = `${cover(current)}<div class="hero-copy"><div class="eyebrow">Continue Reading</div><div class="hero-title">${esc(current.title || current.id)}</div><div class="hero-meta">${esc(current.author || '未知作者')} · ${esc(chapterText(current))} · ${progressText(current)}</div><div class="progress"><i style="width:${current.progress?.percent || 0}%"></i></div><div class="hero-actions"><button class="primary" id="heroContinue">继续阅读</button><button class="subtle" id="heroDetail">查看详情</button><button class="ghost" data-view-jump="notes">整理笔记</button></div></div>`;
+        $('continueHero').innerHTML = `${cover(current, 'hero-cover', true)}<div class="hero-copy"><div class="eyebrow">Continue Reading</div><div class="hero-title">${esc(current.title || current.id)}</div><div class="hero-meta">${esc(current.author || '未知作者')} · ${esc(chapterText(current))} · ${progressText(current)}</div><div class="progress"><i style="width:${current.progress?.percent || 0}%"></i></div><div class="hero-manifest"><div class="manifest-item"><strong>逐句读懂</strong><span>英文原句和中文证据一起看。</span></div><div class="manifest-item"><strong>语境查词</strong><span>先看本句义，再看词典短释。</span></div><div class="manifest-item"><strong>复习沉淀</strong><span>查过的词进入主动学习。</span></div></div><div class="hero-actions"><button class="primary" id="heroContinue">继续阅读</button><button class="subtle" id="heroDetail">查看详情</button><button class="ghost" data-view-jump="notes">整理笔记</button></div></div>`;
         $('heroContinue').onclick = () => openBook(current);
         $('heroDetail').onclick = () => openDrawer(current);
       }
@@ -4144,34 +4777,131 @@ def library_page_html_v2() -> str:
     function renderSettings() {
       const ok = state.dashboard?.ok;
       const importResult = state.lastImport ? `<article class="asset-card"><div><strong>最近导入成功</strong><p>${esc(state.lastImport.book?.title || '')}</p><div class="book-meta">已复制到内部书库，原文件可删除。</div></div><button class="subtle" data-open-import="${esc(state.lastImport.book?.id || '')}">打开</button></article>` : '';
-      $('settingsPanel').innerHTML = `${importResult}<article class="asset-card"><div><strong>阅读服务</strong><p>${ok ? '已连接，可以正常打开书库和正文。' : '未连接，请重启 App。'}</p></div><button class="subtle" id="settingsRefresh">重新检查</button></article><article class="asset-card"><div><strong>iPad 访问</strong><p>同一局域网下打开本机地址的 /library，直接阅读地址仍保留 /lan/reader。</p></div><button class="subtle" id="copyLocal">复制本机地址</button></article><details><summary>高级信息</summary><p id="advancedInfo">书籍 ${state.books.length} 本，笔记 ${state.dashboard?.summary?.note_count || 0} 条，红标 ${state.dashboard?.summary?.red_highlight_count || 0} 条。文件状态可在书籍详情中查看。</p></details>`;
+      const hidden = state.hiddenBooks || [];
+      const hiddenList = hidden.length ? hidden.map((book) => `<article class="asset-card"><div><strong>${esc(book.title || book.id)}</strong><p>${esc(book.author || '未知作者')} · 已移出书库，数据仍保留。</p></div><button class="subtle" data-restore-book="${esc(book.id)}">恢复</button></article>`).join('') : `<article class="asset-card"><div><strong>已移出书库</strong><p>这里暂时没有隐藏的书。</p></div><button class="subtle" id="hiddenRefresh">刷新</button></article>`;
+      $('settingsPanel').innerHTML = `${importResult}<article class="asset-card"><div><strong>阅读服务</strong><p>${ok ? '已连接，可以正常打开书库和正文。' : '未连接，请重启 App。'}</p></div><button class="subtle" id="settingsRefresh">重新检查</button></article><article class="asset-card"><div><strong>iPad 访问</strong><p>同一局域网下打开本机地址的 /library，直接阅读地址仍保留 /lan/reader。</p></div><button class="subtle" id="copyLocal">复制本机地址</button></article><details open><summary>已移出书库 · ${hidden.length} 本</summary><div class="asset-list" style="margin-top:10px">${hiddenList}</div></details><details><summary>高级信息</summary><p id="advancedInfo">书籍 ${state.books.length} 本，已移出 ${hidden.length} 本，笔记 ${state.dashboard?.summary?.note_count || 0} 条，红标 ${state.dashboard?.summary?.red_highlight_count || 0} 条。文件状态可在书籍详情中查看。</p></details>`;
       $('settingsRefresh').onclick = () => loadDashboard();
+      if ($('hiddenRefresh')) $('hiddenRefresh').onclick = () => loadDashboard();
       $('copyLocal').onclick = () => navigator.clipboard?.writeText(location.origin + '/library').then(() => toast('已复制地址')).catch(() => toast(location.origin + '/library'));
       document.querySelectorAll('[data-open-import]').forEach((button) => button.onclick = () => openBook(byId(button.dataset.openImport)));
+      document.querySelectorAll('[data-restore-book]').forEach((button) => button.onclick = () => restoreBooks([button.dataset.restoreBook], '已恢复到书库').catch((error) => toast(`恢复失败：${error.message}`)));
     }
     function renderBatchbar() {
       const count = state.selectedIds.size;
       $('batchbar').classList.toggle('show', count > 0);
       $('batchCount').textContent = `已选择 ${count} 本`;
     }
+    function openRemoveModal(bookIds) {
+      const ids = Array.from(new Set(bookIds.filter(Boolean)));
+      const books = ids.map(byId).filter(Boolean);
+      if (!ids.length || !books.length) return;
+      state.pendingRemove = { ids, books };
+      const title = books.length === 1 ? `《${books[0].title || books[0].id}》` : `${books.length} 本书`;
+      $('removeModal').innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="removeTitle">
+        <h2 id="removeTitle">移出书库 ${esc(title)}</h2>
+        <p>这不是删除。它只会从当前书库列表隐藏，方便你把正在读的书留下来。</p>
+        <ul>
+          <li>不会删除 EPUB 文件或内部副本。</li>
+          <li>不会删除阅读进度、笔记、红标和单词本。</li>
+          <li>可以在“设置”里的“已移出书库”恢复。</li>
+        </ul>
+        <div class="modal-actions"><button class="subtle" id="removeCancel">取消</button><button class="danger" id="removeConfirm">移出书库</button></div>
+      </div>`;
+      $('removeModal').classList.add('show');
+      $('removeModal').setAttribute('aria-hidden', 'false');
+      $('removeCancel').onclick = closeRemoveModal;
+      $('removeConfirm').onclick = () => confirmRemove().catch((error) => toast(`移出失败：${error.message}`));
+    }
+    function closeRemoveModal() {
+      $('removeModal').classList.remove('show');
+      $('removeModal').setAttribute('aria-hidden', 'true');
+      state.pendingRemove = null;
+    }
     async function hideBooks(bookIds, message) {
       const ids = Array.from(new Set(bookIds.filter(Boolean)));
       if (!ids.length) return;
       await api('/api/library/books/batch-hide', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({book_ids:ids})});
       ids.forEach((id) => state.selectedIds.delete(id));
-      toast(message || `已移出 ${ids.length} 本，数据保留`);
+      state.lastRemoved = { ids, books: ids.map(byId).filter(Boolean) };
+      toast(message || `已移出 ${ids.length} 本，数据保留`, '撤销', () => restoreBooks(ids, '已恢复到书库').catch((error) => toast(`恢复失败：${error.message}`)));
       await loadDashboard();
+    }
+    async function restoreBooks(bookIds, message) {
+      const ids = Array.from(new Set(bookIds.filter(Boolean)));
+      if (!ids.length) return;
+      await api('/api/library/books/batch-restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({book_ids:ids})});
+      ids.forEach((id) => state.selectedIds.delete(id));
+      toast(message || `已恢复 ${ids.length} 本`);
+      await loadDashboard();
+    }
+    async function confirmRemove() {
+      const pending = state.pendingRemove;
+      if (!pending?.ids?.length) return;
+      const count = pending.ids.length;
+      closeRemoveModal();
+      await hideBooks(pending.ids, count === 1 ? '已移出书库，数据保留' : `已移出 ${count} 本，数据保留`);
+      if (state.selectedBook && pending.ids.includes(state.selectedBook.id)) closeDrawer();
     }
     async function hideSingleBook(book) {
       if (!book) return;
-      if (!confirm(`从书库移除《${book.title || book.id}》？不会删除 EPUB、笔记、红标或阅读进度。`)) return;
-      await hideBooks([book.id], '已从书库列表移除，数据保留');
-      if (state.selectedBook?.id === book.id) closeDrawer();
+      openRemoveModal([book.id]);
     }
     async function batchHide() {
       if (!state.selectedIds.size) return;
-      if (!confirm(`从书库移除 ${state.selectedIds.size} 本？不会删除 EPUB、笔记、红标或阅读进度。`)) return;
-      await hideBooks(Array.from(state.selectedIds), '已批量移出书库，数据保留');
+      openRemoveModal(Array.from(state.selectedIds));
+    }
+    async function favoriteSelectedBooks() {
+      const ids = Array.from(state.selectedIds);
+      if (!ids.length) return;
+      await api('/api/library/books/batch-organization', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({book_ids:ids, favorite:true})});
+      state.selectedIds.clear();
+      toast(`已收藏 ${ids.length} 本`);
+      await loadDashboard();
+    }
+    function openBatchOrgModal() {
+      const ids = Array.from(state.selectedIds);
+      if (!ids.length) return;
+      closeDrawer();
+      const categoryOptions = Array.from(new Set((state.dashboard?.category_groups || []).map((group) => group.category).filter(Boolean))).filter((name) => name !== '未分类');
+      $('orgModal').innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="orgTitle">
+        <h2 id="orgTitle">批量分类 · ${ids.length} 本</h2>
+        <p>空字段保持不变。这里适合把一组书放进同一书架，或统一覆盖一组标签。</p>
+        <div class="org-panel">
+          <strong>收藏状态</strong>
+          <select id="batchFavoriteMode"><option value="keep">保持不变</option><option value="yes">设为收藏</option><option value="no">取消收藏</option></select>
+          <strong>自定义分类</strong>
+          <input id="batchCategoryField" list="batchCategoryList" placeholder="例如：广告、英语、战略">
+          <datalist id="batchCategoryList">${categoryOptions.map((name) => `<option value="${esc(name)}"></option>`).join('')}</datalist>
+          <strong>标签</strong>
+          <input id="batchTagField" placeholder="覆盖标签，用逗号分隔；留空则不改">
+        </div>
+        <div class="modal-actions"><button class="subtle" id="orgCancel">取消</button><button class="primary" id="orgConfirm">应用</button></div>
+      </div>`;
+      $('orgModal').classList.add('show');
+      $('orgModal').setAttribute('aria-hidden', 'false');
+      $('orgCancel').onclick = closeOrgModal;
+      $('orgConfirm').onclick = () => applyBatchOrganization().catch((error) => toast(`批量分类失败：${error.message}`));
+    }
+    function closeOrgModal() {
+      $('orgModal').classList.remove('show');
+      $('orgModal').setAttribute('aria-hidden', 'true');
+    }
+    async function applyBatchOrganization() {
+      const ids = Array.from(state.selectedIds);
+      if (!ids.length) return;
+      const payload = {book_ids: ids};
+      const favoriteMode = $('batchFavoriteMode').value;
+      if (favoriteMode !== 'keep') payload.favorite = favoriteMode === 'yes';
+      const category = $('batchCategoryField').value.trim();
+      if (category) payload.custom_category = category;
+      const tagText = $('batchTagField').value.trim();
+      if (tagText) payload.tags = tagText.split(/[，,]/).map((item) => item.trim()).filter(Boolean);
+      if (Object.keys(payload).length === 1) { toast('没有选择要修改的字段'); return; }
+      await api('/api/library/books/batch-organization', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+      state.selectedIds.clear();
+      closeOrgModal();
+      toast(`已更新 ${ids.length} 本`);
+      await loadDashboard();
     }
     async function batchExport() {
       if (!state.selectedIds.size) return;
@@ -4181,16 +4911,27 @@ def library_page_html_v2() -> str:
     function openDrawer(book) {
       if (!book) return;
       state.selectedBook = book;
-      $('drawer').innerHTML = `<button class="ghost" id="drawerClose">关闭</button>${cover(book)}<h2>${esc(book.title || book.id)}</h2><div class="book-meta">${esc(book.author || '未知作者')} · ${esc(book.reading_state || '')}</div><div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div><div class="drawer-actions"><button class="primary" id="drawerOpen">继续阅读</button><button class="subtle" id="drawerVocab">单词本</button><button class="subtle" data-view-jump="notes">笔记</button><button class="subtle" data-view-jump="red">红标</button><button class="subtle" id="drawerReveal">显示副本</button><button class="subtle" id="drawerExport">导出</button><button class="danger" id="drawerHide">从书库移除</button></div><details><summary>高级信息</summary><p>文件存在：${book.file?.exists ? '是' : '否'}<br>内部副本：${book.file?.owned_internal_copy ? '是' : '否'}<br>${esc(book.file?.file_path || '')}</p></details>`;
+      const org = book.organization || {};
+      const tagText = (org.tags || []).join('，');
+      const favoriteText = org.favorite ? '取消收藏' : '收藏';
+      const categoryOptions = Array.from(new Set((state.dashboard?.category_groups || []).map((group) => group.category).filter(Boolean))).filter((name) => name !== '未分类');
+      const chips = (org.tags || []).length ? `<div class="org-tags">${org.tags.map((tag) => `<span class="badge">${esc(tag)}</span>`).join('')}</div>` : '';
+      $('drawer').innerHTML = `<button class="ghost" id="drawerClose">关闭</button>${cover(book)}<h2>${esc(book.title || book.id)}</h2><div class="book-meta">${esc(book.author || '未知作者')} · ${esc(book.reading_state || '')}</div><div class="book-row"><span class="badge">${esc(org.category || '未分类')}</span>${org.favorite ? '<span class="badge">已收藏</span>' : ''}</div><div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div><div class="drawer-actions"><button class="primary" id="drawerOpen">继续阅读</button><button class="subtle" id="drawerFavorite">${favoriteText}</button><button class="subtle" id="drawerVocab">单词本</button><button class="subtle" data-view-jump="notes">笔记</button><button class="subtle" data-view-jump="red">红标</button><button class="subtle" id="drawerReveal">显示副本</button><button class="subtle" id="drawerExport">导出</button><button class="danger" id="drawerHide">移出书库</button></div><section class="org-panel"><strong>自定义分类</strong><div class="org-row"><input id="categoryField" list="categoryList" value="${esc(org.custom_category || '')}" placeholder="例如：战略、英语、属灵书籍"><button class="primary" id="saveCategory">保存</button></div><datalist id="categoryList">${categoryOptions.map((name) => `<option value="${esc(name)}"></option>`).join('')}</datalist><strong>标签</strong><div class="org-row"><input id="tagField" value="${esc(tagText)}" placeholder="用逗号分隔，例如：面试,精读,复习"><button class="subtle" id="saveTags">保存</button></div>${chips}</section><details><summary>高级信息</summary><p>文件存在：${book.file?.exists ? '是' : '否'}<br>内部副本：${book.file?.owned_internal_copy ? '是' : '否'}<br>${esc(book.file?.file_path || '')}</p></details>`;
       $('drawer').classList.add('open');
       $('drawer').setAttribute('aria-hidden', 'false');
       $('drawerBackdrop').classList.add('show');
       $('drawerClose').onclick = closeDrawer;
       $('drawerOpen').onclick = () => openBook(book);
+      $('drawerFavorite').onclick = () => toggleFavorite(book).catch((error) => toast(`收藏失败：${error.message}`));
       $('drawerVocab').onclick = () => { window.location.href = vocabURL(book.id); };
       $('drawerReveal').onclick = async () => { await api(`/api/library/books/${book.id}/reveal`, {method:'POST'}); toast('已在 Finder 显示'); };
       $('drawerExport').onclick = async () => { await api(`/books/${book.id}/export`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({include_json:true})}); toast('导出完成'); };
-      $('drawerHide').onclick = () => hideSingleBook(book).catch((error) => toast(`移除失败：${error.message}`));
+      $('saveCategory').onclick = () => updateBookOrganization(book, {custom_category:$('categoryField').value}, '分类已保存').catch((error) => toast(`保存失败：${error.message}`));
+      $('saveTags').onclick = () => {
+        const tags = $('tagField').value.split(/[，,]/).map((item) => item.trim()).filter(Boolean);
+        updateBookOrganization(book, {tags}, '标签已保存').catch((error) => toast(`保存失败：${error.message}`));
+      };
+      $('drawerHide').onclick = () => hideSingleBook(book).catch((error) => toast(`移出失败：${error.message}`));
       document.querySelectorAll('#drawer [data-view-jump]').forEach((button) => button.onclick = () => setView(button.dataset.viewJump));
     }
     function closeDrawer() { $('drawer').classList.remove('open'); $('drawer').setAttribute('aria-hidden', 'true'); $('drawerBackdrop').classList.remove('show'); }
@@ -4203,12 +4944,13 @@ def library_page_html_v2() -> str:
       visible(state.view);
       $('serviceStatus').textContent = state.dashboard?.ok ? '可阅读' : '未连接';
       if (state.error) { renderError(); return; }
-      renderHome(); renderLibrary(); renderAssets(); renderSettings();
+      renderHome(); renderLibrary(); renderOrganizationViews(); renderAssets(); renderSettings();
     }
     async function loadDashboard() {
       state.error = null;
-      state.dashboard = await api('/api/library/dashboard');
+      state.dashboard = await api('/api/library/dashboard?include_hidden=true');
       state.books = state.dashboard.books || [];
+      state.hiddenBooks = state.dashboard.hidden_books || [];
       state.assets = state.dashboard.recent_annotations || [];
       Array.from(state.selectedIds).forEach((id) => { if (!byId(id)) state.selectedIds.delete(id); });
       state.activeBookId = state.activeBookId || state.dashboard.current_book?.id || state.books[0]?.id || null;
@@ -4236,8 +4978,8 @@ def library_page_html_v2() -> str:
     }
     $('search').oninput = (event) => { state.query = event.target.value; $('librarySearch').value = state.query; render(); };
     $('librarySearch').oninput = (event) => { state.query = event.target.value; $('search').value = state.query; render(); };
-    $('sort').onchange = (event) => { state.sort = event.target.value; renderLibrary(); };
-    $('stateFilter').onchange = (event) => { state.stateFilter = event.target.value; renderLibrary(); };
+    $('sort').onchange = (event) => { state.sort = event.target.value; render(); };
+    $('stateFilter').onchange = (event) => { state.stateFilter = event.target.value; render(); };
     $('refresh').onclick = () => loadDashboard().catch((error) => { state.error = error.message; render(); });
     ['topImport','sideImport','libraryImport'].forEach((id) => $(id).onclick = () => $('fileInput').click());
     $('selectAll').onclick = () => {
@@ -4247,7 +4989,9 @@ def library_page_html_v2() -> str:
       renderLibrary();
     };
     $('batchClear').onclick = () => { state.selectedIds.clear(); renderLibrary(); };
-    $('batchHide').onclick = () => batchHide().catch((error) => toast(`移除失败：${error.message}`));
+    $('batchFavorite').onclick = () => favoriteSelectedBooks().catch((error) => toast(`批量收藏失败：${error.message}`));
+    $('batchOrganize').onclick = openBatchOrgModal;
+    $('batchHide').onclick = () => batchHide().catch((error) => toast(`移出失败：${error.message}`));
     $('batchExport').onclick = () => batchExport().catch((error) => toast(`导出失败：${error.message}`));
     $('drawerBackdrop').onclick = closeDrawer;
     $('fileInput').onchange = (event) => {
@@ -4257,7 +5001,7 @@ def library_page_html_v2() -> str:
     };
     document.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); $('search').focus(); return; }
-      if (event.key === 'Escape') { closeDrawer(); return; }
+      if (event.key === 'Escape') { closeDrawer(); closeOrgModal(); closeRemoveModal(); return; }
       if (event.key === 'ArrowRight' || event.key === 'ArrowDown') { selectNext(1); return; }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') { selectNext(-1); return; }
       if (event.key === 'Enter' && state.activeBookId && !['INPUT','SELECT','TEXTAREA','BUTTON'].includes(document.activeElement.tagName)) openBook(byId(state.activeBookId));
@@ -4274,7 +5018,7 @@ def vocabulary_page_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sentence Reader Vocabulary</title>
+  <title>Click Reader Vocabulary</title>
   <style>
     :root { color-scheme: dark; --bg:#070807; --panel:#141612; --panel2:#1d211a; --line:#34392e; --text:#f7f3e8; --muted:#aaa590; --accent:#d7a84f; --green:#8fbe7a; --danger:#e9786b; }
     * { box-sizing:border-box; }
@@ -4286,7 +5030,7 @@ def vocabulary_page_html() -> str:
     button.danger { background:rgba(233,120,107,.12); border:1px solid rgba(233,120,107,.34); color:#ffc1b8; }
     input, select { width:100%; border:1px solid var(--line); background:#10120e; color:var(--text); border-radius:8px; padding:10px 12px; outline:none; }
     .shell { max-width:1180px; margin:0 auto; padding:22px; }
-    .top { display:grid; grid-template-columns:auto minmax(190px,1fr) minmax(150px,180px) minmax(118px,150px) minmax(138px,170px) minmax(160px,1fr) auto auto; gap:10px; align-items:center; margin-bottom:16px; }
+    .top { display:grid; grid-template-columns:auto minmax(190px,1fr) minmax(150px,180px) minmax(118px,150px) minmax(138px,170px) minmax(160px,1fr) auto auto auto; gap:10px; align-items:center; margin-bottom:16px; }
     .brand { min-width:0; }
     .brand h1 { margin:0; font-size:24px; letter-spacing:0; }
     .brand p { margin:5px 0 0; color:var(--muted); font-size:13px; }
@@ -4337,6 +5081,7 @@ def vocabulary_page_html() -> str:
       <input id="query" placeholder="查单词或中文义项">
       <button class="primary" id="studyToggle">学习</button>
       <button class="subtle" id="exportGlossary">导出</button>
+      <button class="subtle" id="lifeStudyReview">审校</button>
     </div>
     <div class="stats" id="stats"></div>
     <section class="study" id="studyPanel"></section>
@@ -4520,11 +5265,151 @@ def vocabulary_page_html() -> str:
     $('back').onclick = () => { location.href = state.bookId ? `/library?book_id=${encodeURIComponent(state.bookId)}` : '/library'; };
     $('studyToggle').onclick = () => { state.study.open = !state.study.open; state.study.answer = false; renderStudy(); };
     $('exportGlossary').onclick = () => { if (state.bookId) location.href = `/books/${encodeURIComponent(state.bookId)}/glossary/export.csv`; };
+    $('lifeStudyReview').onclick = () => { location.href = '/lifestudy/vocab/review'; };
     $('bookSelect').onchange = async (event) => { state.bookId = event.target.value; history.replaceState(null, '', `/vocab?book_id=${encodeURIComponent(state.bookId)}`); await loadVocab(); };
     $('statusFilter').onchange = async (event) => { state.status = event.target.value; await loadVocab(); };
     $('alignmentFilter').onchange = async (event) => { state.alignment = event.target.value; await loadVocab(); };
     $('query').oninput = (() => { let timer = 0; return (event) => { state.query = event.target.value; clearTimeout(timer); timer = setTimeout(loadVocab, 180); }; })();
     loadBooks().then(loadVocab).catch((error) => renderEmpty(error.message));
+  </script>
+</body>
+</html>'''
+
+
+def lifestudy_vocab_review_page_html() -> str:
+    return r'''<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Life-study Vocabulary Review</title>
+  <style>
+    :root { color-scheme: dark; --bg:#070807; --panel:#141612; --panel2:#1d211a; --line:#34392e; --text:#f7f3e8; --muted:#aaa590; --accent:#d7a84f; --green:#8fbe7a; --danger:#e9786b; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+    button, input, textarea, select { font:inherit; }
+    button { border:0; border-radius:8px; background:var(--panel2); color:var(--text); padding:9px 12px; cursor:pointer; }
+    button.primary { background:var(--accent); color:#17120a; font-weight:800; }
+    button.subtle { background:#10120e; border:1px solid var(--line); color:#ddd3b8; }
+    button.danger { background:rgba(233,120,107,.12); border:1px solid rgba(233,120,107,.34); color:#ffc1b8; }
+    select, textarea, input { width:100%; border:1px solid var(--line); background:#10120e; color:var(--text); border-radius:8px; padding:9px 10px; outline:none; }
+    textarea { min-height:68px; resize:vertical; line-height:1.45; }
+    .shell { max-width:1240px; margin:0 auto; padding:22px; }
+    .top { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; margin-bottom:14px; }
+    h1 { margin:0; font-size:24px; letter-spacing:0; }
+    .muted { color:var(--muted); font-size:13px; }
+    .stats { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 16px; }
+    .pill { border:1px solid var(--line); background:#10120e; border-radius:999px; padding:5px 9px; color:#ddd3b8; font-size:12px; }
+    .bad { color:#ffd0ca; border-color:rgba(233,120,107,.42); }
+    .good { color:#d9f5c7; border-color:rgba(143,190,122,.42); }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; }
+    .card { border:1px solid var(--line); background:var(--panel); border-radius:10px; padding:13px; display:grid; gap:9px; min-width:0; }
+    .card h2 { margin:0; font-size:20px; word-break:break-word; }
+    .meaning { color:var(--accent); font-weight:800; }
+    .evidence { color:#e8dfc7; line-height:1.55; font-size:13px; }
+    .zh { color:#c9c2ac; }
+    .row { display:grid; grid-template-columns:120px 1fr; gap:8px; align-items:start; }
+    .actions { display:flex; flex-wrap:wrap; gap:7px; }
+    .notice { border:1px dashed #555941; color:#ddd3b8; border-radius:10px; padding:14px; margin-bottom:14px; line-height:1.5; }
+    pre { white-space:pre-wrap; word-break:break-word; background:#10120e; border:1px solid var(--line); border-radius:10px; padding:12px; color:#d8d0ba; }
+    @media (max-width:820px) { .top { grid-template-columns:1fr; } .row { grid-template-columns:1fr; } .shell { padding:14px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top">
+      <button class="subtle" id="back">单词</button>
+      <div><h1>生命读经词库审校</h1><div class="muted">只保存审校文件，不直接写数据库。</div></div>
+      <button class="primary" id="dryRun">Dry-run</button>
+      <button class="subtle" id="reload">刷新</button>
+    </div>
+    <section class="notice" id="notice"></section>
+    <div class="stats" id="stats"></div>
+    <section class="grid" id="grid"></section>
+    <pre id="dryRunOutput" style="display:none"></pre>
+  </main>
+  <script>
+    const state = { payload:null };
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    async function api(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(await response.text());
+      return response.json();
+    }
+    function decisionLabel(value) {
+      return ({pending:'待审', approve:'通过', correct:'修正', reject:'拒绝'})[value] || value;
+    }
+    function renderStats() {
+      const q = state.payload?.quality || {};
+      const c = state.payload?.decision_counts || {};
+      const canExpand = state.payload?.can_expand_next_volume;
+      $('stats').innerHTML = [
+        `总数 ${q.term_count || 0}`,
+        `A ${q.grade_counts?.A || 0}`,
+        `B ${q.grade_counts?.B || 0}`,
+        `待审 ${c.pending || 0}`,
+        `通过 ${c.approve || 0}`,
+        `修正 ${c.correct || 0}`,
+        `拒绝 ${c.reject || 0}`,
+        `污染 ${q.dictionary_pollution_count || 0}`,
+        canExpand ? '可进入下一卷' : '不可进入下一卷'
+      ].map((text, index) => `<span class="pill ${index === 8 ? (canExpand ? 'good' : 'bad') : ''}">${esc(text)}</span>`).join('');
+      $('notice').textContent = canExpand
+        ? 'Genesis 审校已满足下一卷前置条件。真正写库仍需命令行显式 --apply。'
+        : '当前仍不能扩下一卷：所有条目必须完成 approve/correct/reject，审后精度需 >=85%，且不能有缺失书内行或通用词典污染。';
+    }
+    function card(item) {
+      const decision = item.decision || 'pending';
+      return `<article class="card" data-term="${esc(item.term)}">
+        <h2>${esc(item.term)}</h2>
+        <div><span class="pill">Grade ${esc(item.quality_grade)}</span><span class="pill">${esc(decisionLabel(decision))}</span><span class="pill">Page ${esc(item.source_page)}</span></div>
+        <div class="meaning">${esc(item.final_meaning_zh || item.current_meaning_zh || '')}</div>
+        <div class="evidence">${esc(item.evidence_en || '')}</div>
+        <div class="evidence zh">${esc(item.evidence_zh_simp || '')}</div>
+        <div class="row"><label>决定</label><select data-decision="${esc(item.term)}">
+          ${['pending','approve','correct','reject'].map((value) => `<option value="${value}" ${decision === value ? 'selected' : ''}>${decisionLabel(value)}</option>`).join('')}
+        </select></div>
+        <div class="row"><label>修正义项</label><input data-correction="${esc(item.term)}" value="${esc(item.corrected_meaning_zh || '')}" placeholder="仅 decision=correct 时填写"></div>
+        <div class="row"><label>备注</label><textarea data-note="${esc(item.term)}" placeholder="reject 必须填写理由">${esc(item.review_note || '')}</textarea></div>
+        <div class="actions"><button class="primary" data-save="${esc(item.term)}">保存</button><button class="subtle" data-approve="${esc(item.term)}">通过</button><button class="danger" data-reject="${esc(item.term)}">拒绝</button></div>
+      </article>`;
+    }
+    async function saveDecision(term, forced = null) {
+      const card = document.querySelector(`[data-term="${CSS.escape(term)}"]`);
+      const decision = forced || card.querySelector('[data-decision]').value;
+      const corrected = card.querySelector('[data-correction]').value.trim();
+      const note = card.querySelector('[data-note]').value.trim();
+      state.payload = await api('/api/lifestudy/vocab/review/decision', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({term, decision, corrected_meaning_zh:corrected, note})
+      });
+      render();
+    }
+    function bind() {
+      document.querySelectorAll('[data-save]').forEach((button) => button.onclick = () => saveDecision(button.dataset.save).catch((error) => alert(`保存失败：${error.message}`)));
+      document.querySelectorAll('[data-approve]').forEach((button) => button.onclick = () => saveDecision(button.dataset.approve, 'approve').catch((error) => alert(`保存失败：${error.message}`)));
+      document.querySelectorAll('[data-reject]').forEach((button) => button.onclick = () => saveDecision(button.dataset.reject, 'reject').catch((error) => alert(`拒绝需要备注：${error.message}`)));
+    }
+    function render() {
+      renderStats();
+      $('grid').innerHTML = (state.payload?.items || []).map(card).join('');
+      bind();
+    }
+    async function load() {
+      state.payload = await api('/api/lifestudy/vocab/review');
+      render();
+    }
+    $('back').onclick = () => { location.href = '/vocab'; };
+    $('reload').onclick = () => load().catch((error) => alert(`加载失败：${error.message}`));
+    $('dryRun').onclick = async () => {
+      const result = await api('/api/lifestudy/vocab/review/dry-run', {method:'POST'});
+      $('dryRunOutput').style.display = 'block';
+      $('dryRunOutput').textContent = JSON.stringify(result.result || {ok:result.ok, stderr:result.stderr}, null, 2);
+      await load();
+    };
+    load().catch((error) => { $('notice').textContent = `加载失败：${error.message}`; });
   </script>
 </body>
 </html>'''
@@ -4551,6 +5436,26 @@ def library_page() -> HTMLResponse:
 @app.get("/vocab", response_class=HTMLResponse)
 def vocabulary_page() -> HTMLResponse:
     return HTMLResponse(vocabulary_page_html())
+
+
+@app.get("/lifestudy/vocab/review", response_class=HTMLResponse)
+def lifestudy_vocab_review_page() -> HTMLResponse:
+    return HTMLResponse(lifestudy_vocab_review_page_html())
+
+
+@app.get("/api/lifestudy/vocab/review")
+def get_lifestudy_vocab_review() -> dict[str, Any]:
+    return lifestudy_review_api_payload()
+
+
+@app.post("/api/lifestudy/vocab/review/decision")
+def post_lifestudy_vocab_review_decision(payload: LifeStudyVocabReviewDecision) -> dict[str, Any]:
+    return update_lifestudy_review_decision(payload)
+
+
+@app.post("/api/lifestudy/vocab/review/dry-run")
+def post_lifestudy_vocab_review_dry_run() -> dict[str, Any]:
+    return dry_run_lifestudy_review_apply()
 
 
 @app.get("/api/library/dashboard")
@@ -4585,10 +5490,31 @@ def batch_hide_library_books(payload: LibraryBatchHide) -> dict[str, Any]:
     return hide_library_books(payload.book_ids, source="library_web_batch_hide")
 
 
+@app.post("/api/library/books/batch-restore")
+def batch_restore_library_books(payload: LibraryBatchHide) -> dict[str, Any]:
+    return restore_library_books(payload.book_ids, source="library_web_batch_restore")
+
+
 @app.post("/api/library/books/{book_id}/hide")
 def hide_library_book(book_id: str) -> dict[str, Any]:
     result = hide_library_books([book_id], source="library_web_hide")
     return {**result, "book_id": book_id, "library_state": result["library_states"][0]}
+
+
+@app.post("/api/library/books/{book_id}/restore")
+def restore_library_book(book_id: str) -> dict[str, Any]:
+    result = restore_library_books([book_id], source="library_web_restore")
+    return {**result, "book_id": book_id, "library_state": result["library_states"][0]}
+
+
+@app.patch("/api/library/books/{book_id}/organization")
+def patch_library_book_organization(book_id: str, payload: LibraryOrganizationPatch) -> dict[str, Any]:
+    return update_library_book_organization(book_id, payload)
+
+
+@app.post("/api/library/books/batch-organization")
+def patch_library_books_organization(payload: LibraryBatchOrganizationPatch) -> dict[str, Any]:
+    return update_library_books_organization(payload)
 
 
 @app.post("/api/library/books/{book_id}/reveal")

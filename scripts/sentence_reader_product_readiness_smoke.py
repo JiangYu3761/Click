@@ -126,18 +126,20 @@ def check_lan_service() -> tuple[list[str], dict[str, Any]]:
 def check_funasr() -> tuple[list[str], dict[str, Any]]:
     failures: list[str] = []
     ok, text = fetch("http://127.0.0.1:18081/health", timeout=2.0)
-    detail: dict[str, Any] = {"ok": ok, "raw": text[:200]}
+    detail: dict[str, Any] = {"ok": ok, "required": False, "raw": text[:200]}
     if not ok:
-        failures.append("funasr_health_unavailable")
+        detail["decision"] = "funasr_health_unavailable"
         return failures, detail
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
-        failures.append("funasr_health_not_json")
+        detail["decision"] = "optional_invalid_json"
         return failures, detail
     detail["payload"] = payload
     if payload.get("ok") is not True:
-        failures.append("funasr_health_not_ok")
+        detail["decision"] = "optional_not_ok"
+    else:
+        detail["decision"] = "optional_ready"
     return failures, detail
 
 

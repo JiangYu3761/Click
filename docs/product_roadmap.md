@@ -46,6 +46,10 @@ The current priority is product acceptance, not feature expansion. V2.1 is accep
 
 2026-06-26 iPad compact-chrome decision: reduce permanent UI chrome again. Reading text is the product surface; toolbar buttons and sentence actions should be compact overlays and must not reserve large blank areas when inactive.
 
+2026-06-29 Life-study vocabulary decision: Genesis is no longer blocked at the review gate. `Life-study Context Vocabulary Pipeline V1` has passed Genesis first 50 pages and Genesis full-run rule gates, imported only 25 A/B entries into the isolated `reader.domain_glossary_entries` boundary, imported the matching book-specific rows for `book_e0679064039e4e298e9faf3127b65876`, and applied the user-reviewed all-approve override through the explicit review apply command. `can_expand_next_volume=true` now applies only to controlled no-write probes, not to bulk production import. Exodus and Leviticus first-50 plus full no-write runs have completed, producing 19 Exodus A/B and 12 Leviticus A/B importable candidates with no database write. The corpus inventory now shows 51 processable Life-study volumes, with Genesis/Exodus/Leviticus full no-write complete and 48 volumes still needing first-50 no-write probes. All completed full no-write candidates are merged into `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.csv/json/md` with source volume, page, evidence, and review status per term. Separately, all 51 processable volumes now feed one all-word master table at `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.csv/json/md`, covering 38,166 unique normalized English words and 5,297,307 raw English tokens with source volume/page evidence. The implementation plan is `docs/lifestudy_vocab_pipeline_plan.md`.
+
+2026-06-29 voice provider decision: Mac voice notes should default to Apple Speech, with FunASR retained as an optional local provider. The app should not warm FunASR unless the selected provider is FunASR.
+
 V1.2 is done only when:
 
 1. PostgreSQL is available locally.
@@ -175,6 +179,8 @@ V1.9 should connect reader knowledge assets to Hermes/Cognitive OS without putti
 - add smoke tests for payload generation and sync-event persistence
 
 Current V1.9 status: passed for the local sync handoff boundary.
+
+Life-study vocabulary status on 2026-06-29: Genesis extraction, controlled import, frontend lookup, review pack generation, review-apply tooling, a no-write Reader API review UI, assistant evidence-triage suggestions, a single-word review lane, an all-word frequency/context report, a phrase/uncommon-word review document, a no-write stage gate, corpus inventory, high-confidence master vocabulary aggregation, full-corpus all-word master aggregation, and Life-study Context Vocabulary V1 are implemented. Genesis now has 25 reviewed/imported phrase entries, and the full Life-study all-word master covers 51 processable volumes in one table. The V1 quality gate cleaned 38,166 raw unique words into 33,724 clean lemma groups, generated a Top 500 review queue plus Top 2000 reserve queue, and imported only 34 A-grade direct-evidence terms into the Life-study domain glossary. `economy`, `dispensing`, and `mingled` now resolve through `lifestudy_domain_glossary` in Life-study books; ordinary books do not use this source. The V2 learning-review lane now has 6,321 dictionary-guided Chinese-context candidates, 4,102 possible front-end-after-review candidates, a 500-row front-end candidate pack, and a 28-row Codex-adjudicated first batch. Of those 28, 26 have now been explicitly applied into `reader.domain_glossary_entries` through the controlled dry-run/apply boundary; dictionary pollution remains 0 and active Life-study domain terms increased from 59 to 85. Live Reader API lookup now verifies the corrected terms in the imported Life-study Genesis book and confirms ordinary books do not use the Life-study adjudicated meanings. The next improvement is continuing the next reviewed batch, not bulk importing the 33,724-word learning table.
 
 V1.9 hard acceptance script:
 
@@ -682,6 +688,40 @@ Next should focus on:
 - deciding whether the app should be copied to `/Applications/Sentence Reader.app`
 - preserving Dock stability across future rebuilds
 - release notes for rebuilding without breaking the pinned app
+
+Current Life-study context vocabulary status: Genesis is reviewed and applied; Exodus and Leviticus are no-write candidate sources only.
+
+It adds:
+
+- OpenCC-backed bilingual PDF extraction for `01_Genesis(120).pdf`
+- Genesis first-50-pages quality gate
+- Genesis full 1,255-page candidate pack
+- reviewed Genesis override and explicit apply boundary
+- 25 reviewed Genesis A/B entries in the Life-study domain/book-specific lookup boundary
+- Exodus full no-write candidate pack
+- Leviticus full no-write candidate pack
+- corpus inventory for 51 processable Life-study bilingual volumes
+- master vocabulary aggregate at `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.csv/json/md`
+- all-book English word master at `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.csv/json/md`
+- clean all-word master, Top 500 review queue, Top 2000 reserve queue, V1 review pack, and V1 importable pack
+- explicit V1 dry-run/apply/hide script for `reader.domain_glossary_entries`
+- dictionary-guided full-corpus learning review with 6,321 Chinese-context candidates
+- front-end candidate V2 review pack with 500 priority rows
+- Codex-adjudicated first front-end candidate batch with 26 no-write ready-for-dry-run rows
+- controlled dry-run/apply/hide script plus applied smoke for those 26 adjudicated rows
+- Reader API lookup priority fix so Life-study glossary beats dictionary fallback only in Life-study books
+- A/B/C/D grading and A/B-only importable report
+- dry-run-first controlled import tooling
+- phrase-safe Reader API lookup
+- Mac selected-phrase lookup handoff
+
+Next should focus on:
+
+- continuing the next reviewed batch after the 26 applied adjudicated words have passed live lookup
+- keeping `living` learning-only and holding `sacrifice` until more Chinese evidence distinguishes `牺牲` from `祭牲/祭物/祭`
+- expanding the Life-study V1 importable pack only when new meanings have direct Chinese-context evidence
+- continuing Numbers first-50 no-write only for phrase/A-B candidate extraction, not for all-word quantity
+- resolving meaning conflicts such as `divine word` before exposing later-volume phrase meanings in the reader
 
 ## Delayed On Purpose
 
