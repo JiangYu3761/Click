@@ -10,6 +10,27 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 
 ## Priority Rules
 
+### 中文快捷命令说明
+
+| 场景 | 操作 | 结果 |
+| --- | --- | --- |
+| Mac 正文句子 | 单击句子 | 聚焦句子；已有备注时显示备注预览 |
+| Mac 英文单词 | 单击英文词 | 查词 |
+| Mac 正文句子 | 快速双击句子 | 打开备注流程 |
+| Mac 正文句子 | 慢慢点两次 | 两次单击，不等于双击 |
+| Mac 正文句子 | 右键 / 双指点按 | 整句标红 / 取消标红 |
+| Mac 英文单词 | `Option` + 双击 | 备用查词路径 |
+| Mac 选中文字 | `Command+C` | 复制选中文字 |
+| Mac 应用 | `Command+Q` | 退出 Sentence Reader |
+| iPad 正文句子 | 点击句子 | 显示句子操作栏 |
+| iPad 英文单词 | 点击英文词 | 查词 |
+| iPad 正文句子 | 快速双击句子 | 打开备注流程 |
+| iPad 正文句子 | 慢慢点两次 | 两次点击，不等于双击 |
+| iPad 正文句子 | 长按句子 | 整句标红 / 取消标红 |
+| iPad 阅读页 | 左右滑动 | 翻页 |
+
+`双击` means two quick clicks/taps inside the system double-click interval. Two slow clicks/taps are intentionally treated as two separate single-click actions.
+
 | Area | Gesture / Key | Owner | Result |
 | --- | --- | --- | --- |
 | Sentence text | Single click / tap | Sentence Reader | Focus the sentence and show note preview if it already has a note |
