@@ -1,0 +1,55 @@
+# Sentence Reader Interaction Contract
+
+Updated: 2026-06-29
+
+## Decision
+
+Sentence Reader uses a sentence-first interaction contract inside the reading surface.
+
+This does not change macOS or iPadOS globally. It only decides which events the Sentence Reader reading surface claims before WebKit or the operating system default menu handles them.
+
+## Priority Rules
+
+| Area | Gesture / Key | Owner | Result |
+| --- | --- | --- | --- |
+| Sentence text | Single click / tap | Sentence Reader | Focus the sentence and show note preview if it already has a note |
+| English word in sentence text | Single click / tap | Sentence Reader | Look up the clicked word after a short delay, cancelled by double click / double tap |
+| Sentence text | Double click / double tap | Sentence Reader | Open sentence note flow |
+| Sentence text | Option + double click | Sentence Reader, then dictionary/vocab flow | Backup lookup path for pointer devices |
+| Sentence text | Context click / two-finger tap | Sentence Reader | Toggle whole-sentence red highlight |
+| iPad sentence text | Long press | Sentence Reader | Toggle whole-sentence red highlight |
+| Active text selection | Command+C | System/WebKit | Copy selected text |
+| Mac app | Command+Q | System-style app command | Quit Sentence Reader |
+| Active text selection outside sentence text | Context menu | System/WebKit | Show copy/search/share actions |
+| Inputs, textareas, buttons, controls | Click, context menu, keyboard | System/WebKit | Preserve editing, copy, paste, focus, button activation |
+| Page surface | Horizontal wheel/swipe or page keys | Sentence Reader | Turn page once with cooldown |
+| Overlays/sheets | Esc | Sentence Reader first | Close sheet/toast/focus before falling through |
+
+## Hard Rule
+
+If a context click or two-finger tap lands on `.sr-sentence`, Sentence Reader owns it and toggles red highlight, even when text selection exists.
+
+The copy path is `Command+C` or a context menu outside sentence text. This is intentional: whole-sentence red highlight is the app's core shortcut and must not be silently replaced by the operating system menu.
+
+English lookup is intentionally attached to the clicked word, not the whole sentence. If the click is actually the first click of a double-click, the pending lookup is cancelled and the double-click note flow wins.
+
+## Why This Is Reasonable
+
+Sentence Reader exists because Apple Books and default WebKit reading do not provide the desired whole-sentence annotation workflow. Therefore, sentence-level gestures must win on sentence text.
+
+At the same time, Sentence Reader should not fight the operating system in editing or control areas. Text fields, buttons, settings, file inputs, note editors, and non-sentence selection zones keep normal system behavior.
+
+## Implementation Points
+
+- Mac native reader: `Probe/NativeSentenceReader/SentenceReaderNative.swift`
+- iPad/LAN reader: `reader_api/app.py`
+- Contract marker: `sentence-reader-interaction-v1`
+- English lookup marker: `english-click-lookup` / `english-tap-lookup`
+- Static guard: `scripts/sentence_reader_interaction_contract_smoke.py`
+
+## Non-Goals
+
+- Do not change global macOS or iPadOS gestures.
+- Do not make the system context menu the primary sentence annotation path.
+- Do not use long press as the Mac primary red-highlight gesture.
+- Do not route Mac reading through `/lan/reader`.

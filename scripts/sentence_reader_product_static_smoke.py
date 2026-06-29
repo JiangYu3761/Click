@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DIAGNOSTICS = ROOT / "scripts" / "sentence_reader_product_diagnostics.py"
+BACKUP = ROOT / "scripts" / "sentence_reader_backup.py"
+RESTORE_VERIFY = ROOT / "scripts" / "sentence_reader_restore_verify.py"
+PACKAGE = ROOT / "scripts" / "package_sentence_reader_app.py"
+RUN_READER_API = ROOT / "scripts" / "run_reader_api.sh"
+RUNTIME_LAUNCH = ROOT / "scripts" / "reader_runtime_launch_smoke.py"
+RUNTIME_BOOTSTRAP = ROOT / "scripts" / "sentence_reader_runtime_bootstrap.py"
+RUNTIME_PORTABILITY = ROOT / "scripts" / "sentence_reader_runtime_portability.py"
+RUNTIME_CONFIG = ROOT / "scripts" / "sentence_reader_runtime_config.py"
+FIRST_RUN_PREFLIGHT = ROOT / "scripts" / "sentence_reader_first_run_preflight.py"
+HERMES_INGEST = ROOT / "scripts" / "sentence_reader_hermes_ingest.py"
+INTAKE_DRAFT = ROOT / "scripts" / "sentence_reader_intake_draft.py"
+PROMOTE_DRAFT = ROOT / "scripts" / "sentence_reader_promote_intake_draft.py"
+REVIEW_QUEUE = ROOT / "scripts" / "sentence_reader_review_queue.py"
+ACTIVE_PACK_OPERATOR = ROOT / "scripts" / "sentence_reader_active_pack_operator.py"
+NATIVE_COGNITIVE_DASHBOARD_SMOKE = ROOT / "scripts" / "sentence_reader_native_cognitive_dashboard_smoke.py"
+RUNTIME_SETTINGS_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_runtime_settings_static_smoke.py"
+FIRST_RUN_GUIDE_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_first_run_guide_static_smoke.py"
+IDENTITY_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_identity_static_smoke.py"
+FUNASR_WARMUP_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_funasr_warmup_static_smoke.py"
+IMMERSIVE_CHROME_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_immersive_chrome_static_smoke.py"
+ANNOTATION_CORE_V2_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_annotation_core_v2_static_smoke.py"
+IPAD_LAN_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_ipad_lan_static_smoke.py"
+IPAD_LAN_API_SMOKE = ROOT / "scripts" / "reader_api_ipad_lan_smoke.py"
+PRODUCT_READINESS_SMOKE = ROOT / "scripts" / "sentence_reader_product_readiness_smoke.py"
+IMPORT_OWNERSHIP_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_import_ownership_static_smoke.py"
+LIBRARY_UI_STATIC_SMOKE = ROOT / "scripts" / "sentence_reader_library_ui_static_smoke.py"
+LIBRARY_V2_SMOKE = ROOT / "scripts" / "sentence_reader_library_v2_smoke.py"
+PRODUCT_ACCEPTANCE = ROOT / "docs" / "product_acceptance.md"
+LIBRARY_UI_PLAN = ROOT / "docs" / "library_ui_plan.md"
+APP = ROOT / "reader_api" / "app.py"
+LIBRARY_MIGRATION = ROOT / "migrations" / "reader" / "002_library_ui.sql"
+SWIFT = ROOT / "Probe" / "NativeSentenceReader" / "SentenceReaderNative.swift"
+
+
+REQUIRED = {
+    DIAGNOSTICS: [
+        "sentence_reader.product_diagnostics.v1",
+        "reader_api",
+        "sync_events",
+        "require-package",
+        "runtime_portability_status",
+        "runtime_bootstrap_status",
+        "first_run_preflight_status",
+        "sentence_reader_runtime_portability.py",
+        "sentence_reader_runtime_bootstrap.py",
+        "sentence_reader_first_run_preflight.py",
+        "resolve_funasr_paths",
+    ],
+    BACKUP: [
+        "sentence_reader.backup_manifest.v1",
+        "pg_dump",
+        "restore_policy",
+        "destructive_restore_requires_explicit_user_approval",
+    ],
+    RESTORE_VERIFY: [
+        "sentence_reader.restore_verify.v1",
+        "verify_only",
+        "database_dump_missing",
+    ],
+    RUN_READER_API: [
+        "sentence_reader_runtime_bootstrap.py",
+        "SENTENCE_READER_BOOTSTRAP_REPAIR",
+        "SENTENCE_READER_BOOTSTRAP_INSTALL_DEPS",
+        "--print-python",
+        "Run bootstrap preflight",
+    ],
+    RUNTIME_LAUNCH: [
+        "ReaderRuntime",
+        ".venv-reader-api",
+        "run_reader_api.sh",
+        "reader runtime launch smoke PASS",
+    ],
+    RUNTIME_BOOTSTRAP: [
+        "sentence_reader.runtime_bootstrap_report.v1",
+        "startup_ready",
+        "python_candidates",
+        "selected_python",
+        "postgres",
+        "--repair-python",
+        "--install-deps",
+        "--print-python",
+        "--require-startup-ready",
+        "--require-postgres-decision",
+        "auto_install_dependencies_by_default",
+    ],
+    RUNTIME_CONFIG: [
+        "sentence_reader.runtime_config.v1",
+        "SENTENCE_READER_RUNTIME_CONFIG",
+        "SENTENCE_READER_FUNASR_PYTHON",
+        "SENTENCE_READER_FUNASR_WORKER",
+        "SentenceReader.funASRPythonPath.v1",
+        "SentenceReader.funASRWorkerPath.v1",
+        "resolve_funasr_paths",
+        "legacy_default",
+    ],
+    FIRST_RUN_PREFLIGHT: [
+        "sentence_reader.first_run_preflight_report.v1",
+        "first_run_ready",
+        "runtime_bootstrap",
+        "postgres",
+        "reader_api",
+        "funasr",
+        "auto_install_postgresql",
+        "destructive_database_actions",
+        "--require-first-run-ready",
+        "--require-funasr-configurable",
+    ],
+    RUNTIME_PORTABILITY: [
+        "sentence_reader.runtime_portability_report.v1",
+        "current_machine_ready",
+        "clean_mac_ready",
+        "clean_mac_blockers",
+        "runtime_python_points_to_xcode",
+        "postgres_not_bundled",
+        "--require-current-machine-ready",
+        "--require-clean-mac-decision",
+    ],
+    HERMES_INGEST: [
+        "/sync/hermes/ingest",
+        "cognitive-os-dir",
+        "sync-event-id",
+        "dry-run",
+    ],
+    INTAKE_DRAFT: [
+        "sentence_reader.book_intake_draft.v1",
+        "INCOMING_DIR",
+        "DRAFT_DIR",
+        "active_pack_mutation",
+        "promotion_allowed",
+    ],
+    PROMOTE_DRAFT: [
+        "sentence_reader.intake_draft_promotion_report.v1",
+        "--approved",
+        "FORMAL_INTAKE_DIR",
+        "rebuild-active-pack",
+        "missing_approved_flag",
+    ],
+    REVIEW_QUEUE: [
+        "sentence_reader.intake_review_queue.v1",
+        "ready_to_approve",
+        "needs_review",
+        "already_promoted",
+        "approve_rebuild_quality_gate",
+        "--rebuild-active-pack",
+    ],
+    ACTIVE_PACK_OPERATOR: [
+        "sentence_reader.active_pack_operator_report.v1",
+        "sentence_reader.active_pack_operator_rollback.v1",
+        "missing --approved",
+        "rollback_on_failure",
+        "rebuild_active_pack",
+        "run_quality_gate",
+        "--skip-quality-gate",
+    ],
+    NATIVE_COGNITIVE_DASHBOARD_SMOKE: [
+        "CognitiveDashboardWindowController",
+        "statusFilterControl",
+        "showCognitiveDashboardWindow",
+        "打开所选草稿",
+        "打开Markdown仪表盘",
+    ],
+    RUNTIME_SETTINGS_STATIC_SMOKE: [
+        "RuntimeEnvironmentWindowController",
+        "runtimeEnvironmentButton",
+        "runFirstRunPreflightForApp",
+        "saveFunASRRuntimePaths",
+        "--require-first-run-ready",
+    ],
+    FIRST_RUN_GUIDE_STATIC_SMOKE: [
+        "showFirstRunGuideIfNeeded",
+        "formatFirstRunGuide",
+        "复制修复指引",
+        "打开配置目录",
+        "didShowFirstRunGuide",
+    ],
+    IDENTITY_STATIC_SMOKE: [
+        "SentenceReader.icns",
+        "CFBundleIconFile",
+        "persistent-apps",
+        "Dock",
+    ],
+    FUNASR_WARMUP_STATIC_SMOKE: [
+        "funASRServerProcess",
+        "startFunASRWarmServiceIfAvailable",
+        "transcribeWithFunASRServer",
+        "funasr warmup static PASS",
+    ],
+    IMMERSIVE_CHROME_STATIC_SMOKE: [
+        "readerHeaderView",
+        "installReaderChromeMonitor",
+        "setReaderChromeVisible(false)",
+        "immersive chrome static PASS",
+    ],
+    ANNOTATION_CORE_V2_STATIC_SMOKE: [
+        "SWIFT_MARKERS",
+        "__sentenceReaderApplyAnnotations",
+        "toggleRedSentences",
+        "hasSystemTextSelection",
+        "notePreview",
+        "annotation core v2 static PASS",
+    ],
+    IPAD_LAN_STATIC_SMOKE: [
+        "iPadLANButton",
+        "/lan/reader",
+        "sentence_reader.lan_manifest.v1",
+        "measuredContentWidth",
+        "noteToast",
+        "ipad lan static PASS",
+    ],
+    IPAD_LAN_API_SMOKE: [
+        "reader api ipad lan smoke PASS",
+        "write_epub",
+        "/lan/books/book_lan_smoke/manifest",
+        "/lan/audio-notes/transcribe",
+        "funasr unavailable in smoke",
+    ],
+    PRODUCT_READINESS_SMOKE: [
+        "sentence_reader.product_readiness_smoke.v1",
+        "lsof",
+        "18180",
+        "LAN_MARKERS",
+        "funasr_health_unavailable",
+        "sentence reader product readiness smoke PASS",
+    ],
+    IMPORT_OWNERSHIP_STATIC_SMOKE: [
+        "import ownership static PASS",
+        "copyImportedEPUBToOwnedLibrary",
+        "verifyOwnedEPUBCopy",
+        "isOwnedImportedBookFile",
+        "epubPath: url.path",
+    ],
+    LIBRARY_UI_STATIC_SMOKE: [
+        "library ui static PASS",
+        "/api/library/dashboard",
+        "sentence_reader.library_dashboard.v1",
+        "library_v2",
+        "data-library-v2",
+        "continue-hero",
+        "data-open-book-card",
+        "native_reader_url",
+        "surface=mac-app",
+        "non_destructive",
+    ],
+    LIBRARY_V2_SMOKE: [
+        "library v2 smoke PASS",
+        "sentence_reader_library_ui_static_smoke",
+    ],
+    LIBRARY_MIGRATION: [
+        "reader.library_state",
+        "hidden BOOLEAN NOT NULL DEFAULT false",
+        "Safe to re-run",
+    ],
+    PRODUCT_ACCEPTANCE: [
+        "Sentence Reader Product Acceptance",
+        "Daily-use Product Boundary",
+        "/api/library/dashboard",
+        "Hard Checks",
+        "Stop Condition",
+        "http://192.168.1.100:18180/lan/reader",
+    ],
+    LIBRARY_UI_PLAN: [
+        "Sentence Reader Library UI Plan",
+        "Library V2",
+        "reading-first",
+        "reader.library_state",
+        "GET /api/library/dashboard",
+        "sentence-reader://open-native",
+        "surface=mac-app",
+        "POST /api/library/import",
+        "non-destructive",
+    ],
+    APP: [
+        "/library",
+        "/api/library/dashboard",
+        "/api/library/import",
+        "/api/library/books/{book_id}/cover",
+        "/api/library/books/{book_id}/hide",
+        "/api/library/books/{book_id}/reveal",
+        "sentence_reader.library_dashboard.v1",
+        "library_v2",
+        "library_page_html_v2",
+        "data-library-v2",
+        "continue-hero",
+        "data-open-book-card",
+        "recentAssets",
+        "notesView",
+        "redView",
+        "batchHide",
+        "batchExport",
+        "epub_cover_asset",
+        "generated_cover_svg",
+        "native_reader_url",
+        "get('surface') === 'mac-app'",
+        "/lan/reader",
+        "/lan/books/{book_id}/manifest",
+        "/lan/books/{book_id}/chapters/{chapter_index}",
+        "/lan/books/{book_id}/asset/{asset_path:path}",
+        "/lan/audio-notes/transcribe",
+        "measuredContentWidth",
+        "noteToast",
+        "noteToastVisible",
+        "pageTurnLockUntil",
+        "state.pageTurnLockUntil = now + 720",
+        "sentence_reader.lan_manifest.v1",
+        "trusted_lan_only",
+        "/cognitive/dashboard",
+        "/cognitive/review-queue",
+        "/cognitive/review-item",
+        "/cognitive/operator/dry-run",
+        "/cognitive/operator/preflight",
+        "/cognitive/operator/approve",
+        "sentence_reader.cognitive_dashboard.v1",
+        "render_cognitive_dashboard_markdown",
+        "Approval History",
+        "sentence_reader.cognitive_review_item.v1",
+        "APPROVE",
+        "confirmation_mismatch",
+        "sentence_reader_review_queue.py",
+        "sentence_reader_active_pack_operator.py",
+        "default_cognitive_ops_dir",
+    ],
+    PACKAGE: [
+        "ReaderRuntime",
+        "copy_reader_runtime",
+        "copy_reader_venv",
+        "write_runtime_manifest",
+        "sentence_reader.runtime_manifest.v1",
+        "sentence_reader_runtime_bootstrap.py",
+        "sentence_reader_runtime_config.py",
+        "sentence_reader_first_run_preflight.py",
+        "sentence_reader_runtime_portability.py",
+        "SentenceReader.icns",
+        "CFBundleIconFile",
+        "ensure_app_icon",
+        "runtime_manifest.json",
+        ".venv-reader-api",
+        "migrations",
+        "sentence_reader_hermes_ingest.py",
+        "sentence_reader_intake_draft.py",
+        "sentence_reader_promote_intake_draft.py",
+        "sentence_reader_review_queue.py",
+        "sentence_reader_active_pack_operator.py",
+        "run_reader_api.sh",
+    ],
+    SWIFT: [
+        "readerAPIScriptCandidates",
+        "ReaderRuntime/scripts/run_reader_api.sh",
+        "run_reader_api.sh",
+        "CognitiveDashboardWindowController",
+        "CognitiveDashboardDraftRow",
+        "CognitiveDashboardHistoryRow",
+        "cognitiveDashboardWindowController",
+        "cognitiveButton",
+        "runtimeEnvironmentButton",
+        "RuntimeEnvironmentWindowController",
+        "showRuntimeEnvironment",
+        "showFirstRunGuideIfNeeded",
+        "formatFirstRunGuide",
+        "复制修复指引",
+        "打开配置目录",
+        "SENTENCE_READER_BOOTSTRAP_REPAIR=1",
+        "runFirstRunPreflightForApp",
+        "firstRunPreflightScriptCandidates",
+        "saveFunASRRuntimePaths",
+        "打开预检报告",
+        "reviewCognitiveQueue",
+        "cognitiveDashboard",
+        "showCognitiveDashboardWindow",
+        "statusFilterControl",
+        "approvalHistoryTextView",
+        "cognitiveReviewItem",
+        "cognitiveApprove",
+        "runtimeConfigURL",
+        "resolvedFunASRPaths",
+        "startFunASRWarmServiceIfAvailable",
+        "transcribeWithFunASRServer",
+        "funASRServerProcess",
+        "--server",
+        "/transcribe",
+        "installReaderChromeMonitor",
+        "setReaderChromeVisible(false)",
+        "titlebarAppearsTransparent = true",
+        ".fullSizeContentView",
+        "webView.topAnchor.constraint(equalTo: root.topAnchor)",
+        "leftPageSliverGuard",
+        "pixelAlignedOffset",
+        "__sentenceReaderAnnotationCoreV2",
+        "__sentenceReaderApplyAnnotations",
+        "showNotePreview",
+        "selectedSentences",
+        "hasSystemTextSelection",
+        "toggleRedSentences",
+        "copyImportedEPUBToOwnedLibrary",
+        "verifyOwnedEPUBCopy",
+        "normalizedImportedBookEntry",
+        "sentenceIndexPayload",
+        ".sr-sentence.sr-note",
+        "iPadLANButton",
+        "showIPadLANReader",
+        "ensureReaderAPILANAvailable",
+        "preferredIPadLANReaderURL",
+        "preferredIPadLibraryURL",
+        "mainRootView",
+        "libraryHomeWebView",
+        "showMainLibrary",
+        "hideMainLibraryForReading",
+        "buildLibraryWebWindowController",
+        "openNativeReaderFromLibraryBookID",
+        "url.scheme == \"sentence-reader\"",
+        "url.host == \"open-native\"",
+        "surface=mac-app",
+        "nativeBookEntry(fromLibraryBook",
+        "upsertAndLoadNativeLibraryEntry",
+        "func libraryDashboard()",
+        "http://127.0.0.1:18180/library",
+        "旧书库表格仅作降级入口",
+        "libraryButton",
+        "showLibraryWindow",
+        "readerMoreButton",
+        "showReaderMoreMenu",
+        "NSStackView(views: [libraryButton, bookTitleLabel, NSView(), contentsButton, notesButton, settingsButton, readerMoreButton])",
+        "libraryTableView",
+        "makeLibraryBookCell",
+        "importBookFromLibrary",
+        "openSelectedLibraryBook",
+        "revealSelectedLibraryBook",
+        "removeSelectedLibraryBook",
+        "不删除内部 EPUB 副本、阅读位置、标红、笔记或 PostgreSQL 数据",
+        "READER_API_HOST",
+        "0.0.0.0",
+        "SentenceReader.funASRPythonPath.v1",
+        "SentenceReader.funASRWorkerPath.v1",
+        "SENTENCE_READER_FUNASR_PYTHON",
+        "SENTENCE_READER_FUNASR_WORKER",
+        "promptCognitiveApproval",
+        "approveCognitiveDraft",
+        "打开仪表盘",
+        "打开Markdown仪表盘",
+        "打开所选草稿",
+        "批准入库",
+        "确认短语不匹配",
+        "APPROVE",
+        "/cognitive/dashboard",
+        "/cognitive/review-queue",
+        "/cognitive/review-item",
+        "/cognitive/operator/dry-run",
+        "/cognitive/operator/approve",
+    ],
+}
+
+
+def main() -> int:
+    missing_files = [str(path) for path in REQUIRED if not path.exists()]
+    missing_markers: dict[str, list[str]] = {}
+    for path, markers in REQUIRED.items():
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        missing = [marker for marker in markers if marker not in text]
+        if missing:
+            missing_markers[str(path)] = missing
+
+    if missing_files or missing_markers:
+        print(f"product static FAIL missing_files={missing_files} missing_markers={missing_markers}")
+        return 1
+    print("product static PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
