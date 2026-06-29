@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from reader_api import db
 
 
-app = FastAPI(title="Click Reader API", version="2.0.0")
+app = FastAPI(title="Click API", version="2.0.0")
 
 
 DEFAULT_HERMES_COGNITIVE_OS_DIR = Path(
@@ -478,7 +478,7 @@ def xml_escape(value: Any) -> str:
 
 def generated_cover_svg(book: dict[str, Any]) -> bytes:
     title = str(book.get("title") or "Untitled")
-    author = str(book.get("author") or "Click Reader")
+    author = str(book.get("author") or "Click")
     book_id = str(book.get("id") or book.get("book_hash") or title)
     primary, accent = cover_palette(book_id)
     title_lines = [title[i : i + 12] for i in range(0, min(len(title), 36), 12)] or ["Untitled"]
@@ -609,7 +609,7 @@ def lan_reader_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Click Reader LAN</title>
+  <title>Click</title>
   <style>
     :root { color-scheme: dark; --bg:#050505; --panel:#141414; --text:#f4f4f4; --muted:#aaa; --line:#2b2b2b; --blue:#62a8ff; --red:rgba(255,59,48,.62); --lan-page-width:100vw; --lan-toolbar-height:42px; --lan-page-gap:36px; --reader-font-size:20px; --reader-line-height:1.82; --reader-side-pad:18px; --reader-bottom-pad:18px; }
     * { box-sizing: border-box; }
@@ -680,7 +680,7 @@ def lan_reader_html() -> str:
 <body>
   <div id="scrim"></div>
   <aside id="drawer">
-    <div id="drawerHeader"><strong>Click Reader</strong><button id="closeDrawer">收起</button></div>
+    <div id="drawerHeader"><strong>Click</strong><button id="closeDrawer">收起</button></div>
     <div id="books"></div>
     <div id="chapters"></div>
   </aside>
@@ -4026,7 +4026,7 @@ def library_page_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Click Reader Library</title>
+  <title>Click</title>
   <style>
     :root { color-scheme: dark; --bg:#090b10; --panel:#11151d; --panel-2:#171c26; --line:#283142; --text:#f5f7fb; --muted:#9ca8ba; --blue:#4f8cff; --green:#28c76f; --red:#ff5f57; --amber:#ffb020; }
     * { box-sizing:border-box; }
@@ -4105,7 +4105,7 @@ def library_page_html() -> str:
 <body>
   <div class="app" data-ui-style="tabler-inspired" data-structure-reference="komga-style-library">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">CR</div><div><strong>Click Reader</strong><span>本地书库</span></div></div>
+      <div class="brand"><div class="brand-mark">C</div><div><strong>Click</strong><span>本地书库</span></div></div>
       <nav class="nav" id="nav"></nav>
       <div class="drop">
         <strong>导入 EPUB</strong>
@@ -4330,7 +4330,7 @@ def library_page_html_v2() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Click Reader Library</title>
+  <title>Click</title>
   <style>
     :root {
       color-scheme: dark;
@@ -4473,7 +4473,7 @@ def library_page_html_v2() -> str:
 <body>
   <div class="app-shell" data-library-v2="true" data-native-reader-contract="sentence-reader://open-native">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">CR</div><div><strong>Click Reader</strong><span>点击读懂</span></div></div>
+      <div class="brand"><div class="brand-mark">C</div><div><strong>Click</strong><span>点击读懂</span></div></div>
       <nav class="nav" id="nav"></nav>
       <div class="side-action">
         <button class="primary" id="sideImport">导入 EPUB</button>
@@ -5018,7 +5018,7 @@ def vocabulary_page_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Click Reader Vocabulary</title>
+  <title>Click</title>
   <style>
     :root { color-scheme: dark; --bg:#070807; --panel:#141612; --panel2:#1d211a; --line:#34392e; --text:#f7f3e8; --muted:#aaa590; --accent:#d7a84f; --green:#8fbe7a; --danger:#e9786b; }
     * { box-sizing:border-box; }

@@ -107,7 +107,7 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
             return
         }
         if status == .denied || status == .restricted {
-            updateStatus("麦克风权限未开启，请到系统设置允许 Click Reader 使用麦克风。")
+            updateStatus("麦克风权限未开启，请到系统设置允许 Click 使用麦克风。")
             return
         }
 
@@ -1666,8 +1666,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
 
-        let appMenu = NSMenu(title: "Click Reader")
-        let quitItem = NSMenuItem(title: "退出 Click Reader", action: #selector(quitApplication(_:)), keyEquivalent: "q")
+        let appMenu = NSMenu(title: "Click")
+        let quitItem = NSMenuItem(title: "退出 Click", action: #selector(quitApplication(_:)), keyEquivalent: "q")
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
         appMenu.addItem(quitItem)
@@ -1954,13 +1954,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         libraryHomeWebView.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
-        window.title = "Click Reader 书库"
+        window.title = "Click 书库"
         statusLabel.stringValue = "已进入主界面；选择书籍后会在本窗口打开正文"
     }
 
     private func hideMainLibraryForReading() {
         libraryHomeWebView?.isHidden = true
-        window.title = "Click Reader"
+        window.title = "Click"
         revealReaderChromeTemporarily()
     }
 
@@ -2160,7 +2160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             backing: .buffered,
             defer: false
         )
-        window.title = "Click Reader"
+        window.title = "Click"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -2835,7 +2835,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             backing: .buffered,
             defer: false
         )
-        window.title = "Click Reader 书库"
+        window.title = "Click 书库"
         window.minSize = NSSize(width: 920, height: 620)
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -3038,7 +3038,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         title.font = NSFont(name: "Microsoft YaHei", size: 20) ?? NSFont.systemFont(ofSize: 20, weight: .semibold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "所有导入的 EPUB 会复制进 Click Reader 内部书库；导入成功后原 EPUB 可删除。")
+        let subtitle = NSTextField(labelWithString: "所有导入的 EPUB 会复制进 Click 内部书库；导入成功后原 EPUB 可删除。")
         subtitle.font = NSFont(name: "Microsoft YaHei", size: 12) ?? NSFont.systemFont(ofSize: 12)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
@@ -3368,7 +3368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         libraryHomeWebView.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
-        window.title = "Click Reader 单词本"
+        window.title = "Click 单词本"
         statusLabel.stringValue = "已打开当前书的单词本"
     }
 
@@ -3945,7 +3945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         alert.messageText = "iPad 局域网阅读"
         let modeLine = lanReady
             ? "Reader API 已切换到局域网模式。"
-            : "Reader API 已响应本机访问，但未确认是局域网模式；如果 iPad 打不开，请退出 Click Reader 后重新打开并先点 iPad。"
+            : "Reader API 已响应本机访问，但未确认是局域网模式；如果 iPad 打不开，请退出 Click 后重新打开并先点 iPad。"
         alert.informativeText = "\(modeLine)\n\n同一 Wi-Fi 下在 iPad Safari 打开主界面：\n\(url)\n\n直接阅读入口仍可用：\n\(readerURL)\n\n主界面地址已复制到剪贴板。"
         alert.addButton(withTitle: "打开本机主界面")
         alert.addButton(withTitle: "复制地址")
