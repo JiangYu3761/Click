@@ -10,7 +10,7 @@ Updated: 2026-06-29
 
 - 学习用总单词本：1 个，33,724 个词。
 - 已确定可进前台查词的 Life-study 语境词：34 个。
-- 有中文文档证据、较适合下一轮审核的候选词：6,321 个。
+- 有中文文档证据、较适合下一轮审核的候选词：6,321 个，其中 4,116 个已自动归入学习候选，2,205 个不确定词已完成同条中英证据二审。
 - 粗候选线索：27,369 个。
 
 所以这个系统现在有两个层次：
@@ -123,7 +123,7 @@ Updated: 2026-06-29
 | 原始归一化英文词 | 38,166 | 全量统计 | 不可以 |
 | 清洗后学习词表 | 33,724 | 学习、审核、候选义 | 不可以 |
 | 中文文档候选义总表 | 33,724 | 后续学习和审核主表 | 不可以 |
-| 词典辅助且命中中文上下文 | 6,321 | 下一轮重点审核 | 不可以，需审核 |
+| 词典辅助且命中中文上下文 | 6,321 | 下一轮重点审核；已拆成 4,116 自动学习候选和 2,205 二审结果 | 不可以，需前台级单独审核 |
 | 统计中文上下文候选 | 27,369 | 线索 | 不可以 |
 | 已确认可入库 | 34 | 前台查词 | 可以 |
 
@@ -157,7 +157,7 @@ Updated: 2026-06-29
 | source | 含义 | 当前数量 | 怎么用 |
 | --- | --- | ---: | --- |
 | `known_term_found_in_chinese_context` | 已知 Life-study 术语，并在中文上下文中命中 | 34 | 可以进入前台 |
-| `dictionary_guided_term_found_in_chinese_context` | 本地词典给出中文候选，且该中文词确实出现在生命读经中文证据句里 | 6,321 | 优先审核 |
+| `dictionary_guided_term_found_in_chinese_context` | 本地词典给出中文候选，且该中文词确实出现在生命读经中文证据句里 | 6,321 | 已完成学习层二审；仍不能直接进前台 |
 | `statistical_chinese_context_candidate` | 从中文上下文统计抽出的候选短语 | 27,369 | 只作为线索 |
 
 注意：
@@ -197,6 +197,39 @@ Updated: 2026-06-29
 2. 中文候选义在中文证据句里清楚出现。
 3. 这个中文候选义确实是在翻译这个英文词，而不是同一句里碰巧出现。
 4. 如果一个词有多个常见义，必须写清楚语境条件。
+
+### 第二阶段补充：2,205 个不确定词二审结果
+
+本轮只处理这个文件：
+
+`reports/lifestudy_vocab_corpus/lifestudy_dictionary_guided_review_v2_needs_manual_review.csv`
+
+输入数量：
+
+- 2,205 行
+- 全部来自 `learning_review_decision = needs_manual_review`
+- 不包含 26 个前台词
+- 不包含 4,116 个已初审通过学习候选
+
+二审输出：
+
+| 文件 | 数量 | 用途 |
+| --- | ---: | --- |
+| `lifestudy_needs_review_adjudication_v1.csv` | 2,205 | 2,205 个不确定词的完整裁定表 |
+| `lifestudy_needs_review_corrected_learning_candidate.csv` | 3 | 原候选义错位，但可由同条中文证据修正 |
+| `lifestudy_needs_review_learning_only.csv` | 2,197 | 可作为学习词表材料，不进入前台正式词典 |
+| `lifestudy_needs_review_reject.csv` | 5 | 页眉噪声、候选义过泛或证据不支持 |
+| `lifestudy_needs_review_still_needs_manual_review.csv` | 0 | 当前没有剩余待审项 |
+
+已修正的 3 个例子：
+
+- `sermon -> 讲道`
+- `misused -> 误用`
+- `siloam -> 西罗亚`
+
+注意：
+
+这 2,205 条现在只是学习层裁定结果。它们没有写入 PostgreSQL，没有进入前台查词，也没有污染 `reader.dictionary_entries`。如果以后要把其中一部分升级进前台，必须另建前台级审核队列、dry-run、显式 apply。
 
 ### 第三阶段：谨慎看 27,369 个粗候选
 

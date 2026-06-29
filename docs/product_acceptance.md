@@ -74,6 +74,7 @@ The product-grade check is not a single manual glance. It requires:
 - `.venv-reader-api/bin/python scripts/lifestudy_all_words_chinese_context_candidates_smoke.py` after the 51-volume clean all-word table exists
 - `.venv-reader-api/bin/python scripts/lifestudy_dictionary_guided_review_v2_smoke.py` after the dictionary-guided learning review exists
 - `.venv-reader-api/bin/python scripts/lifestudy_needs_review_adjudication_v1_smoke.py` after the 2,205-row needs-review adjudication exists
+  - Expected current result: 2,205 input rows, 2,205 output rows, 2,205 adjudicated, 0 still needing manual review, 0 database writes, 0 front-end import-ready rows.
 - `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_review_v2_smoke.py` after the front-end human-review candidate pack exists
 - `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_v2_smoke.py` after the operator-delegated Codex adjudication pack exists
 - `.venv-reader-api/bin/python scripts/lifestudy_frontend_candidate_adjudication_apply_smoke.py` after the 26-row adjudicated dry-run boundary exists
