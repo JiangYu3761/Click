@@ -213,7 +213,7 @@ V2.0A hard acceptance script:
 
 V2.0A adds:
 
-- bundled `ReaderRuntime` resources inside `build/Sentence Reader.app`
+- bundled `ReaderRuntime` resources inside `build/Click.app`
 - Swift startup fallback from bundled `ReaderRuntime/scripts/run_reader_api.sh` to the development script path
 - product diagnostics report at `reports/sentence_reader_product_diagnostics_report.json`
 - non-destructive PostgreSQL backup artifact using `pg_dump --schema=reader`
@@ -232,7 +232,7 @@ V2.0B hard acceptance script:
 
 V2.0B adds:
 
-- bundled `.venv-reader-api` inside `build/Sentence Reader.app/Contents/Resources/ReaderRuntime`
+- bundled `.venv-reader-api` inside `build/Click.app/Contents/Resources/ReaderRuntime`
 - bundled `migrations/reader/001_reader_schema.sql` inside ReaderRuntime
 - `run_reader_api.sh` now prefers the runtime-local `.venv-reader-api/bin/python`
 - launch smoke proves packaged `ReaderRuntime/scripts/run_reader_api.sh` can start Reader API on a temporary port
@@ -689,7 +689,7 @@ The App now has one product direction: local durable reading data + sentence-lev
 Next should focus on:
 
 - manually testing Library V2 with 10+ real EPUBs and unusual cover metadata
-- deciding whether the app should be copied to `/Applications/Sentence Reader.app`
+- deciding whether the app should be copied to `/Applications/Click.app`
 - preserving Dock stability across future rebuilds
 - release notes for rebuilding without breaking the pinned app
 

@@ -74,7 +74,7 @@ Latest Life-study 2,205 needs-review adjudication status on 2026-06-29: `scripts
 
 Latest Life-study 2,205 needs-review frontendization status on 2026-06-30: `scripts/lifestudy_needs_review_frontend_queue.py` and `scripts/lifestudy_needs_review_frontend_adjudication.py` now promote only a small high-confidence slice of the 2,205 needs-review adjudication result into front-end lookup candidates. The queue reads only `lifestudy_needs_review_corrected_learning_candidate.csv` and `lifestudy_needs_review_learning_only.csv`; it excludes the 5 rejected rows, the 0 still-needs-manual-review rows, the old 26 front-end words, and the 4,116 auto-accepted learning rows. Current first-pass counts: 2,200 eligible learning rows, Top300 queue, 20 queue-level front-end candidates, 15 front-end-ready terms after strict evidence adjudication, 10 `frontend_ready`, 5 `frontend_corrected`, 279 `learning_only_keep`, 6 `needs_more_evidence`, 0 general-dictionary writes. The explicit apply wrote 15 B-grade terms only to `reader.domain_glossary_entries` with `source_title='Life-study Needs-review Frontend V1'`; preflight before apply found 85 active Life-study domain terms and dictionary pollution 0, and after apply `scripts/lifestudy_needs_review_frontend_applied_smoke.py` verifies 15 applied terms and dictionary pollution 0. Live lookup smoke verifies `authority -> 权柄`, `vision -> 异象`, `ascension -> 升天`, `parable -> 比喻`, and `holy -> 神圣的` resolve through `lifestudy_domain_glossary` for the imported Life-study book and do not leak into an ordinary book. Mac and iPad/LAN lookup cards now expose Life-study source metadata more clearly: source title, volume/page, evidence sentences, and a copy action on LAN.
 
-2026-06-30 validation for that frontendization pass is complete: Reader API pytest, Python compileall, Swift native compile, app packaging, `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, needs-review front-end queue smoke, applied smoke, live lookup smoke, UI static smoke, and live product readiness smoke all pass. The 15 applied terms are the first trustworthy front-end slice from the 2,205 learning adjudication result; the remaining learning rows are not front-end glossary entries yet. The product identity cleanup also removes the old `Click` title from the Mac menu and Reader API web surfaces, so `Command+Q` and the iPad LAN page now use Sentence Reader naming consistently. Current verified iPad URL on this machine is `http://<mac-lan-ip>:18180/lan/reader`; the Reader API is running on `0.0.0.0:18180`.
+2026-06-30 validation for that frontendization pass is complete: Reader API pytest, Python compileall, Swift native compile, app packaging, `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, needs-review front-end queue smoke, applied smoke, live lookup smoke, UI static smoke, and live product readiness smoke all pass. The 15 applied terms are the first trustworthy front-end slice from the 2,205 learning adjudication result; the remaining learning rows are not front-end glossary entries yet. The product identity cleanup now uses `Click` for user-facing app, Dock, menu, and web-surface naming; `SentenceReader` remains only as internal executable/support-path naming for compatibility with existing local data. Current verified iPad URL on this machine is `http://<mac-lan-ip>:18180/lan/reader`; the Reader API is running on `0.0.0.0:18180`.
 
 Latest Life-study front-end candidate Review V2 status on 2026-06-29: `scripts/lifestudy_frontend_candidate_review_v2.py` now narrows the 4,102 possible front-end candidates into a Top 500 human-review pack. The stricter gate requires domain/theological hints and keeps high-frequency generic words out of the suggested front-end list. Current counts: 500 top review rows, 28 `approve_after_human_check` suggestions, 472 `needs_human_review`, and 0 front-end import-ready rows. It also writes `lifestudy_frontend_candidate_review_v2_overrides_template.json/.csv` for future human approve/correct/reject decisions. No PostgreSQL writes are performed.
 
@@ -158,13 +158,13 @@ The existing V1 native reading shell already supports:
 - sync payload files under `~/Library/Application Support/SentenceReader/HermesSync`
 - pending sync attempts persisted through `reader.sync_events`
 - V1.9 hard acceptance script: `scripts/v19_hermes_sync_acceptance.sh`
-- bundled `ReaderRuntime` resources inside `build/Sentence Reader.app`
+- bundled `ReaderRuntime` resources inside `build/Click.app`
 - Reader API startup script discovery from bundled runtime first, development path second
 - product diagnostics report generation
 - non-destructive PostgreSQL backup artifact generation
 - restore verification without writing back to PostgreSQL
 - V2.0A hard acceptance script: `scripts/v20_product_packaging_acceptance.sh`
-- bundled `.venv-reader-api` inside `build/Sentence Reader.app/Contents/Resources/ReaderRuntime`
+- bundled `.venv-reader-api` inside `build/Click.app/Contents/Resources/ReaderRuntime`
 - bundled `migrations/reader/001_reader_schema.sql` inside ReaderRuntime
 - package-local Reader API launch smoke test
 - V2.0B hard acceptance script: `scripts/v20b_runtime_acceptance.sh`
@@ -257,7 +257,7 @@ The existing V1 native reading shell already supports:
 - Dock pin helper: `scripts/pin_sentence_reader_to_dock.py`
 - product identity smoke: `scripts/sentence_reader_identity_static_smoke.py`
 - V2.0S hard acceptance script: `scripts/v20s_product_identity_acceptance.sh`
-- current packaged app has been added to the macOS Dock as `Sentence Reader`
+- current packaged app has been added to the macOS Dock as `Click`
 - V2.1 iPad LAN Reader: trusted same-LAN browser access through `GET /lan/reader`
 - iPad LAN Reader can list books, open EPUB spine chapters, serve EPUB assets, save Reader API-backed red highlights, save notes, and save paginated reading position
 - iPad LAN Reader hotfix: chapter/book lists are now hidden in a slide-out `目录` drawer instead of permanently occupying the reading page
@@ -550,7 +550,7 @@ V1.9 is not AI summary generation and not real Hermes ingestion. It is the clean
 
 V2.0A adds the first product-packaging foundation:
 
-- `package_sentence_reader_app.py` now bundles `ReaderRuntime` into `build/Sentence Reader.app/Contents/Resources/ReaderRuntime`
+- `package_sentence_reader_app.py` now bundles `ReaderRuntime` into `build/Click.app/Contents/Resources/ReaderRuntime`
 - bundled runtime includes `reader_api`, `requirements-reader-api.txt`, Reader API startup/migration/status scripts, diagnostics, backup, and restore verification tools
 - Swift Reader API startup now checks `ReaderRuntime/scripts/run_reader_api.sh` first and falls back to the development project script path
 - `sentence_reader_product_diagnostics.py` writes a JSON report for PostgreSQL, Reader API, app bundle, ReaderRuntime, app-support storage, FunASR paths, and sync-event counts
@@ -872,7 +872,7 @@ V2.0S adds product identity and Dock-friendly access:
 - `generate_sentence_reader_icon.py` generates a reading-themed icon with an open book and red bookmark
 - generated icon files live under `assets/SentenceReader.iconset`
 - generated app icon is `assets/SentenceReader.icns`
-- `package_sentence_reader_app.py` copies the icon into `Sentence Reader.app/Contents/Resources`
+- `package_sentence_reader_app.py` copies the icon into `Click.app/Contents/Resources`
 - `Info.plist` now sets `CFBundleIconFile` to `SentenceReader`
 - packaged output prints `app_icon=True`
 - `pin_sentence_reader_to_dock.py` adds the packaged app to the Dock with duplicate detection

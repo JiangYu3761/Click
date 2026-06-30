@@ -15,7 +15,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
-DEFAULT_APP = ROOT / "build" / "Sentence Reader.app"
+DEFAULT_APP = ROOT / "build" / "Click.app"
 DEFAULT_RUNTIME = (
     ROOT
     if ROOT.name == "ReaderRuntime"

@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "sentence_reader_runtime_bootstrap.py"
-RUNTIME = ROOT / "build" / "Sentence Reader.app" / "Contents" / "Resources" / "ReaderRuntime"
+RUNTIME = ROOT / "build" / "Click.app" / "Contents" / "Resources" / "ReaderRuntime"
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:

@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_SCRIPT = ROOT / "scripts" / "sentence_reader_runtime_config.py"
 PREFLIGHT_SCRIPT = ROOT / "scripts" / "sentence_reader_first_run_preflight.py"
-RUNTIME = ROOT / "build" / "Sentence Reader.app" / "Contents" / "Resources" / "ReaderRuntime"
+RUNTIME = ROOT / "build" / "Click.app" / "Contents" / "Resources" / "ReaderRuntime"
 
 
 def run(command: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:

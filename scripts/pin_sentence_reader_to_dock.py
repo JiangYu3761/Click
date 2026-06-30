@@ -9,7 +9,7 @@ from urllib.parse import quote, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "build" / "Sentence Reader.app"
+APP = ROOT / "build" / "Click.app"
 DOCK_PLIST = Path.home() / "Library/Preferences/com.apple.dock.plist"
 
 
@@ -30,15 +30,24 @@ def dock_entry_label(entry: dict) -> str:
     return value if isinstance(value, str) else ""
 
 
-def dock_entry_matches(entry: dict, app_path: Path) -> bool:
+def dock_entry_is_target(entry: dict, app_path: Path) -> bool:
     raw_url = dock_entry_url(entry)
-    label = dock_entry_label(entry)
     decoded_url = unquote(raw_url)
     parsed_path = unquote(urlparse(raw_url).path).rstrip("/")
     return (
         parsed_path == str(app_path)
         or decoded_url.rstrip("/") == app_uri(app_path).rstrip("/")
-        or (label == "Sentence Reader" and parsed_path.endswith("Sentence Reader.app"))
+    )
+
+
+def dock_entry_is_legacy(entry: dict) -> bool:
+    raw_url = dock_entry_url(entry)
+    label = dock_entry_label(entry)
+    parsed_path = unquote(urlparse(raw_url).path).rstrip("/")
+    return (
+        label in {"Sentence Reader", "Click"}
+        and (parsed_path.endswith("Sentence Reader.app") or parsed_path.endswith("Click.app"))
+        or parsed_path.endswith("Sentence Reader.app")
     )
 
 
@@ -55,13 +64,16 @@ def dedupe_dock_entries(app_path: Path) -> int:
         return 0
     kept: list[dict] = []
     removed = 0
-    seen_sentence_reader = False
+    seen_click = False
     for entry in apps:
-        if isinstance(entry, dict) and dock_entry_matches(entry, app_path):
-            if seen_sentence_reader:
+        if isinstance(entry, dict) and dock_entry_is_target(entry, app_path):
+            if seen_click:
                 removed += 1
                 continue
-            seen_sentence_reader = True
+            seen_click = True
+        elif isinstance(entry, dict) and dock_entry_is_legacy(entry):
+            removed += 1
+            continue
         kept.append(entry)
     if removed == 0:
         return 0
@@ -101,7 +113,7 @@ def dock_item_xml(app_path: Path) -> str:
         "<integer>0</integer>"
         "</dict>"
         "<key>file-label</key>"
-        "<string>Sentence Reader</string>"
+        "<string>Click</string>"
         "</dict>"
         "<key>tile-type</key>"
         "<string>file-tile</string>"
@@ -110,7 +122,7 @@ def dock_item_xml(app_path: Path) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pin the packaged Sentence Reader app to the macOS Dock.")
+    parser = argparse.ArgumentParser(description="Pin the packaged Click app to the macOS Dock.")
     parser.add_argument("--app", default=str(APP))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

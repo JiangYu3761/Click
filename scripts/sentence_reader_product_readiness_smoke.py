@@ -12,7 +12,7 @@ from urllib.request import urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_BUNDLE = ROOT / "build" / "Sentence Reader.app"
+APP_BUNDLE = ROOT / "build" / "Click.app"
 CURRENT_STATUS = ROOT / "docs" / "current_status.md"
 PRODUCT_ROADMAP = ROOT / "docs" / "product_roadmap.md"
 PRODUCT_ACCEPTANCE = ROOT / "docs" / "product_acceptance.md"

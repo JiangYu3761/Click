@@ -24,7 +24,7 @@ DEFAULT_APP_SUPPORT = Path(
     )
 )
 REPORTS = Path(os.getenv("SENTENCE_READER_REPORTS", str(DEFAULT_APP_SUPPORT / "Reports")))
-DEFAULT_RUNTIME = ROOT if ROOT.name == "ReaderRuntime" else ROOT / "build" / "Sentence Reader.app" / "Contents" / "Resources" / "ReaderRuntime"
+DEFAULT_RUNTIME = ROOT if ROOT.name == "ReaderRuntime" else ROOT / "build" / "Click.app" / "Contents" / "Resources" / "ReaderRuntime"
 DEFAULT_PG_BIN = Path(os.getenv("POSTGRES_APP_BIN", "/Applications/Postgres.app/Contents/Versions/latest/bin"))
 DEFAULT_DATABASE_URL = os.getenv("READER_DATABASE_URL") or os.getenv("DATABASE_URL") or "postgresql://localhost/sentence_reader"
 READER_API_URL = os.getenv("READER_API_HEALTH_URL", "http://127.0.0.1:18180/health")

@@ -21,7 +21,7 @@ DEFAULT_APP_SUPPORT = Path(
     )
 )
 REPORTS = Path(os.getenv("SENTENCE_READER_REPORTS", str(DEFAULT_APP_SUPPORT / "Reports")))
-DEFAULT_RUNTIME = ROOT if ROOT.name == "ReaderRuntime" else ROOT / "build" / "Sentence Reader.app" / "Contents" / "Resources" / "ReaderRuntime"
+DEFAULT_RUNTIME = ROOT if ROOT.name == "ReaderRuntime" else ROOT / "build" / "Click.app" / "Contents" / "Resources" / "ReaderRuntime"
 DEFAULT_PG_BIN = Path(os.getenv("POSTGRES_APP_BIN", "/Applications/Postgres.app/Contents/Versions/latest/bin"))
 
 

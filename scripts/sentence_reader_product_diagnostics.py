@@ -34,7 +34,7 @@ HERMES_COGNITIVE_OS = Path(
 def app_bundle_path() -> Path:
     if ROOT.name == "ReaderRuntime" and ROOT.parent.name == "Resources":
         return ROOT.parents[2]
-    return ROOT / "build" / "Sentence Reader.app"
+    return ROOT / "build" / "Click.app"
 
 
 APP_BUNDLE = app_bundle_path()

@@ -184,13 +184,13 @@ iPad / 局域网页面：
 当前开发机上，App 位于：
 
 ```bash
-build/Sentence Reader.app
+build/Click.app
 ```
 
 打开：
 
 ```bash
-open "build/Sentence Reader.app"
+open "build/Click.app"
 ```
 
 正常情况下，打开后会进入 `书库` 主界面。

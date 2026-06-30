@@ -13,7 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VISUAL_PROBE = ROOT / "Probe" / "ReadiumVisualReaderProbe"
 NATIVE_SOURCE = ROOT / "Probe" / "NativeSentenceReader" / "SentenceReaderNative.swift"
-APP = ROOT / "build" / "Sentence Reader.app"
+APP = ROOT / "build" / "Click.app"
+LEGACY_APP = ROOT / "build" / "Sentence Reader.app"
 EXECUTABLE = APP / "Contents" / "MacOS" / "SentenceReader"
 INFO_PLIST = APP / "Contents" / "Info.plist"
 RESOURCES = APP / "Contents" / "Resources"
@@ -279,8 +280,9 @@ def main() -> int:
         print(native.stdout)
         return native.returncode
 
-    if APP.exists():
-        shutil.rmtree(APP)
+    for app_bundle in (APP, LEGACY_APP):
+        if app_bundle.exists():
+            shutil.rmtree(app_bundle)
 
     EXECUTABLE.parent.mkdir(parents=True, exist_ok=True)
     RESOURCES.mkdir(parents=True, exist_ok=True)

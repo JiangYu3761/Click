@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RUNTIME = ROOT / "build" / "Sentence Reader.app" / "Contents" / "Resources" / "ReaderRuntime"
+DEFAULT_RUNTIME = ROOT / "build" / "Click.app" / "Contents" / "Resources" / "ReaderRuntime"
 PG_BIN = Path(os.getenv("POSTGRES_APP_BIN", "/Applications/Postgres.app/Contents/Versions/latest/bin"))
 
 
