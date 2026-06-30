@@ -100,6 +100,7 @@ REQUIRED_MARKERS = {
     "library dashboard bridge": "libraryDashboard()",
     "library native entry resolver": "nativeBookEntry(fromLibraryBook",
     "library native entry upsert": "upsertAndLoadNativeLibraryEntry",
+    "bundled demo honest title": "Click 示例书",
     "library table view": "libraryTableView",
     "library book cell": "makeLibraryBookCell",
     "library import action": "importBookFromLibrary",

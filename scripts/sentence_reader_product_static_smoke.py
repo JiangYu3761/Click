@@ -431,6 +431,7 @@ REQUIRED = {
         "surface=mac-app",
         "nativeBookEntry(fromLibraryBook",
         "upsertAndLoadNativeLibraryEntry",
+        "Click 示例书",
         "func libraryDashboard()",
         "http://127.0.0.1:18180/library",
         "旧书库表格仅作降级入口",

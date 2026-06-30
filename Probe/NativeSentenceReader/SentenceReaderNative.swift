@@ -1589,7 +1589,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     private let funASRPythonDefaultPath = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/SentenceReader/FunASR/.venv/bin/python")
     private let funASRWorkerDefaultPath = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/SentenceReader/FunASR/funasr_worker.py")
     private let funASRServerPort = 18081
-    private let bookTitleLabel = NSTextField(labelWithString: "好战略，坏战略")
+    private let bookTitleLabel = NSTextField(labelWithString: "Click 示例书")
     private let openBookButton = NSButton(title: "打开", target: nil, action: nil)
     private let libraryButton = NSButton(title: "书库", target: nil, action: nil)
     private let bookSwitcherButton = NSButton(title: "书籍", target: nil, action: nil)
@@ -2209,8 +2209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
         let bookRoot = resourceURL.appendingPathComponent("default-book", isDirectory: true)
         let defaultEntry = BookEntry(
-            title: "好战略，坏战略",
-            author: "Richard Rumelt",
+            title: "Click 示例书",
+            author: "Click",
             bookHash: "sentence-reader-default-good-strategy-bad-strategy-v1",
             epubPath: resourceURL.appendingPathComponent("default-fixture.epub").path,
             bookRootPath: bookRoot.path,
@@ -3033,8 +3033,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return nil
         }
         return BookEntry(
-            title: "好战略，坏战略",
-            author: "Richard Rumelt",
+            title: "Click 示例书",
+            author: "Click",
             bookHash: defaultHash,
             epubPath: defaultEPUB.path,
             bookRootPath: resourceURL.appendingPathComponent("default-book", isDirectory: true).path,

@@ -115,11 +115,12 @@ python3 scripts/probe_readium_publication_open.py --timeout 300
 
 Result:
 
-- Readium Streamer opened the real EPUB fixture.
-- Title: `好战略，坏战略`
+- Readium Streamer opened the bundled smoke EPUB fixture.
+- Display name in the app: `Click 示例书`
+- EPUB metadata title: `Sentence Reader Smoke Book`
 - Media type: `application/epub+zip`
-- Reading order count: `49`
-- Table of contents count: `8`
+- Reading order count: `1`
+- Table of contents count: `1`
 - Reports:
   - `reports/readium_publication_open_probe.json`
   - `reports/readium_publication_open_summary.json`

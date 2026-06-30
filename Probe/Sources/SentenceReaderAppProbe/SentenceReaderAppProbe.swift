@@ -318,7 +318,7 @@ private struct NoteEditorView: View {
 }
 
 private enum SampleData {
-    static let book = BookReference(title: "好战略，坏战略", author: "理查德·鲁梅尔特", bookHash: "sample-good-strategy")
+    static let book = BookReference(title: "Click 示例书", author: "Click", bookHash: "sample-click-demo")
     static let now = Date(timeIntervalSince1970: 1_800_000_000)
     static let sentenceID = StableID.sentenceID(
         bookHash: book.bookHash,
