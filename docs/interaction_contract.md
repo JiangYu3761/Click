@@ -18,7 +18,7 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 | Mac 英文单词 | 单击英文词 | 查词 |
 | Mac 正文句子 | 快速双击句子 | 打开备注流程 |
 | Mac 正文句子 | 慢慢点两次 | 两次单击，不等于双击 |
-| Mac 正文句子 | 右键 / 双指点按 | 整句标红 / 取消标红 |
+| Mac 正文句子 | 双指点按 | 整句标红 / 取消标红 |
 | Mac 英文单词 | `Option` + 双击 | 备用查词路径 |
 | Mac 选中文字 | `Command+C` | 复制选中文字 |
 | Mac 应用 | `Command+Q` | 退出 Sentence Reader |
@@ -26,7 +26,7 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 | iPad 英文单词 | 点击英文词 | 查词 |
 | iPad 正文句子 | 快速双击句子 | 打开备注流程 |
 | iPad 正文句子 | 慢慢点两次 | 两次点击，不等于双击 |
-| iPad 正文句子 | 长按句子 | 整句标红 / 取消标红 |
+| iPad 句子操作栏 | 点 `红标` | 整句标红 / 取消标红 |
 | iPad 阅读页 | 左右滑动 | 翻页 |
 
 `双击` means two quick clicks/taps inside the system double-click interval. Two slow clicks/taps are intentionally treated as two separate single-click actions.
@@ -37,8 +37,8 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 | English word in sentence text | Single click / tap | Sentence Reader | Look up the clicked word after a short delay, cancelled by double click / double tap |
 | Sentence text | Double click / double tap | Sentence Reader | Open sentence note flow |
 | Sentence text | Option + double click | Sentence Reader, then dictionary/vocab flow | Backup lookup path for pointer devices |
-| Sentence text | Context click / two-finger tap | Sentence Reader | Toggle whole-sentence red highlight |
-| iPad sentence text | Long press | Sentence Reader | Toggle whole-sentence red highlight |
+| Mac sentence text | Two-finger tap | Sentence Reader | Toggle whole-sentence red highlight |
+| iPad sentence action bar | Red button | Sentence Reader | Toggle whole-sentence red highlight |
 | Active text selection | Command+C | System/WebKit | Copy selected text |
 | Mac app | Command+Q | System-style app command | Quit Sentence Reader |
 | Active text selection outside sentence text | Context menu | System/WebKit | Show copy/search/share actions |
@@ -48,9 +48,9 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 
 ## Hard Rule
 
-If a context click or two-finger tap lands on `.sr-sentence`, Sentence Reader owns it and toggles red highlight, even when text selection exists.
+If a two-finger tap lands on `.sr-sentence`, Sentence Reader owns it and toggles red highlight, even when text selection exists.
 
-The copy path is `Command+C` or a context menu outside sentence text. This is intentional: whole-sentence red highlight is the app's core shortcut and must not be silently replaced by the operating system menu.
+The copy path is `Command+C` or a context menu outside sentence text. This is intentional: whole-sentence red highlight is the app's core shortcut and must not be silently replaced by a menu flow.
 
 English lookup is intentionally attached to the clicked word, not the whole sentence. If the click is actually the first click of a double-click, the pending lookup is cancelled and the double-click note flow wins.
 

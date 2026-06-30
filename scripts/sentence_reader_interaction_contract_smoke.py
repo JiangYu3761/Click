@@ -88,6 +88,8 @@ def main() -> int:
             "Command+C",
             "Command+Q",
             "Inputs, textareas, buttons, controls",
+            "Mac sentence text | Two-finger tap",
+            "iPad sentence action bar | Red button",
         ],
         missing_markers,
     )
@@ -96,7 +98,8 @@ def main() -> int:
         [
             "Keep the interaction-router contract stable",
             "single-click/single-tap on an English word",
-            "context click/two-finger click on a sentence",
+            "Mac two-finger tap for whole-sentence red highlight",
+            "iPad bottom action bar for red highlight",
             "Command+C",
             "Command+Q",
         ],

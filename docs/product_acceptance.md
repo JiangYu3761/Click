@@ -25,7 +25,7 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Mark whole sentences red, including multi-line selections.
 - Add text notes and voice notes, then see the note again by clicking the sentence.
 - Keep the interaction-router contract stable: sentence-level gestures win on sentence text; editing fields and controls still keep system behavior.
-- Use single-click/single-tap on an English word for lookup, double-click/double-tap for sentence notes, context click/two-finger click on a sentence for whole-sentence red highlight, `Command+C` for copying selected text, and `Option` + double-click as a backup word-lookup path on pointer devices.
+- Use single-click/single-tap on an English word for lookup, double-click/double-tap for sentence notes, Mac two-finger tap for whole-sentence red highlight, the iPad bottom action bar for red highlight, `Command+C` for copying selected text, and `Option` + double-click as a backup word-lookup path on pointer devices.
 - English lookup must fall back to the general dictionary even when the current book has not generated a book-local vocabulary list.
 - English phrase lookup must preserve selected phrases such as `tree of life` instead of collapsing them into a single unusable token.
 - Life-study context meanings must stay book/domain-scoped and must not be imported into the general dictionary.
