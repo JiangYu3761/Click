@@ -1,0 +1,24 @@
+.venv-reader-api/
+.pytest_cache/
+__pycache__/
+*.pyc
+Probe/.build/
+Probe/ReadiumDependencyProbe/.build/
+**/.swiftpm/
+build/
+.playwright-cli/
+reports/
+data/external/
+output/
+docs/images/
+
+# Local runtime and user data should never be published.
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.log
+*.xcresult/
+
+# macOS noise.
+.DS_Store

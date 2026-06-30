@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentence Reader V1 Wireframe</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000;
+      --chrome: #070707;
+      --panel: #101114;
+      --line: #272a30;
+      --text: #f4f4f5;
+      --muted: #a3a8b2;
+      --accent: #409cff;
+      --red: #ff453a;
+      --red-bg: rgba(255, 69, 58, .58);
+      --focus: rgba(64, 156, 255, .24);
+      --note: #f3b53f;
+      --shadow: 0 10px 28px rgba(0, 0, 0, .45);
+      font-family: "Microsoft YaHei", "微软雅黑", "PingFang SC", "Heiti SC", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .window {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: 42px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: auto auto auto 1fr auto auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .traffic {
+      display: flex;
+      gap: 8px;
+      width: 68px;
+      padding-left: 2px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #c9ced6;
+    }
+
+    .dot.close { background: #ff5f57; }
+    .dot.min { background: #ffbd2f; }
+    .dot.max { background: #28c840; }
+
+    button {
+      min-height: 30px;
+      border: 1px solid #30343b;
+      background: #16181d;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    button.icon {
+      width: 32px;
+      padding: 0;
+      font-weight: 700;
+    }
+
+    .reader-entry {
+      min-width: 92px;
+      white-space: nowrap;
+      background: #f4f4f5;
+      border-color: #f4f4f5;
+      color: #050505;
+      font-weight: 700;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .35) inset;
+    }
+
+    .title {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .sync {
+      font-size: 12px;
+      color: #54d675;
+      padding: 5px 8px;
+      border: 1px solid rgba(84, 214, 117, .32);
+      background: rgba(84, 214, 117, .12);
+      border-radius: 999px;
+    }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 242px minmax(520px, 1fr) 312px;
+    }
+
+    .sidebar, .notes {
+      min-height: 0;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notes {
+      border-right: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      height: 28px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .tab.active {
+      background: #22252c;
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .section {
+      padding: 12px 14px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: #8a93a1;
+    }
+
+    .book-row, .toc-row, .note-row {
+      margin: 0 10px 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .book-row.active, .toc-row.active, .note-row.active {
+      background: rgba(64, 156, 255, .18);
+    }
+
+    .meta {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .reader-shell {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 28px minmax(0, 1fr);
+      background: #000;
+    }
+
+    .reader-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      background: #050505;
+    }
+
+    .reader {
+      overflow: hidden;
+      padding: 2px 10px 22px;
+      background: #000;
+    }
+
+    .page {
+      max-width: none;
+      height: calc(100vh - 92px);
+      margin: 0 auto;
+      padding: 2px 10px 22px;
+      background: #000;
+      box-shadow: none;
+      border: 0;
+      border-radius: 0;
+      column-width: calc(100vw - 40px);
+      column-gap: 20px;
+      column-fill: auto;
+    }
+
+    @media (min-width: 1380px) {
+      .reader {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .page {
+        max-width: none;
+        column-width: calc((100vw - 72px) / 2);
+        column-gap: 24px;
+        column-fill: auto;
+      }
+
+      .page h1,
+      .page p {
+        break-inside: avoid;
+      }
+    }
+
+    h1 {
+      margin: 0 0 22px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 16px;
+      font-size: 17px;
+      line-height: 1.78;
+    }
+
+    .sentence {
+      border-radius: 4px;
+      padding: 1px 2px;
+      transition: background .12s ease;
+      cursor: default;
+    }
+
+    .sentence:hover {
+      background: rgba(255, 255, 255, .08);
+    }
+
+    .sentence.focused {
+      background: var(--focus);
+      outline: 1px solid rgba(124, 190, 255, .28);
+    }
+
+    .sentence.highlighted {
+      background: var(--red-bg);
+      box-shadow: inset 0 0 0 1px rgba(255, 130, 120, .34);
+    }
+
+    .sentence.has-note::after {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-left: 4px;
+      border-radius: 50%;
+      background: var(--note);
+      vertical-align: middle;
+    }
+
+    .notes-head {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .filter {
+      display: flex;
+      gap: 4px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .chip {
+      border-radius: 999px;
+      border: 1px solid #30343b;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    .chip.active {
+      color: var(--text);
+      background: #22252c;
+    }
+
+    .note-kind {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .note-kind .marker {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--note);
+    }
+
+    .note-kind .marker.red {
+      background: var(--red);
+    }
+
+    .floating-editor {
+      position: fixed;
+      left: 50%;
+      top: 52%;
+      transform: translate(-50%, -50%);
+      width: min(520px, calc(100vw - 48px));
+      background: #121318;
+      border: 1px solid #30343b;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      display: none;
+      z-index: 10;
+    }
+
+    .floating-editor.open {
+      display: block;
+    }
+
+    .editor-title {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .quote {
+      margin: 14px;
+      padding: 10px 12px;
+      border-left: 3px solid #9db7ea;
+      background: #f4f7fc;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #384253;
+    }
+
+    textarea {
+      display: block;
+      width: calc(100% - 28px);
+      min-height: 112px;
+      margin: 0 14px 14px;
+      resize: vertical;
+      border: 1px solid #cfd5dd;
+      border-radius: 6px;
+      padding: 10px;
+      font: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .editor-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 0 14px 14px;
+    }
+
+    .primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .context-menu {
+      position: fixed;
+      width: 178px;
+      background: #fff;
+      border: 1px solid #d7dce4;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 5px;
+      display: none;
+      z-index: 11;
+      font-size: 13px;
+    }
+
+    .context-menu.open {
+      display: block;
+    }
+
+    .menu-item {
+      padding: 7px 9px;
+      border-radius: 6px;
+    }
+
+    .menu-item:hover {
+      background: #eef3fb;
+    }
+
+    @media (max-width: 1050px) {
+      .workspace {
+        grid-template-columns: 220px minmax(420px, 1fr);
+      }
+
+      .notes {
+        display: none;
+      }
+
+      .reader {
+        padding: 2px 10px 22px;
+      }
+
+      .reader-entry {
+        min-width: 74px;
+        padding: 0 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="window">
+    <header class="toolbar">
+      <div class="traffic" aria-hidden="true">
+        <span class="dot close"></span>
+        <span class="dot min"></span>
+        <span class="dot max"></span>
+      </div>
+      <button>打开书</button>
+      <button class="reader-entry" id="readerEntry">阅读入口</button>
+      <div class="title">Sentence Reader · 定位：从用户心智开始</div>
+      <span class="sync">本地保存</span>
+      <button>导出</button>
+      <button class="icon" id="toggleNotes" title="切换笔记栏">⌥</button>
+    </header>
+
+    <section class="workspace" id="workspace">
+      <aside class="sidebar">
+        <div class="tabs">
+          <div class="tab active">书籍</div>
+          <div class="tab">目录</div>
+          <div class="tab">笔记</div>
+        </div>
+        <div class="section">最近打开</div>
+        <div class="book-row active">
+          定位：从用户心智开始
+          <div class="meta">EPUB · 第 3 章</div>
+        </div>
+        <div class="book-row">
+          创业维艰
+          <div class="meta">EPUB · 未打开</div>
+        </div>
+        <div class="section">目录</div>
+        <div class="toc-row">第 1 章 心智阶梯</div>
+        <div class="toc-row active">第 3 章 定位不是口号</div>
+        <div class="toc-row">第 4 章 选择战场</div>
+      </aside>
+
+      <section class="reader-shell">
+        <div class="reader-status">
+          <span>第 3 章 · 42%</span>
+          <span>单击聚焦 · 双击备注 · 右键标红</span>
+        </div>
+        <article class="reader">
+          <div class="page">
+            <h1>第 3 章 定位不是口号</h1>
+            <p>
+              <span class="sentence focused has-note" data-note="定位的重点不是表达自己，而是占住对方已有的分类。">真正有效的定位，不是把产品说得更漂亮，而是在用户心智里找到一个可以被占据的位置。</span>
+              <span class="sentence highlighted" data-note="">如果一个市场已经有清晰的第一名，后来者就不应该用同样的话术冲进去。</span>
+              <span class="sentence" data-note="">更好的做法，是选择一个更小、更明确、用户已经有痛感的切口。</span>
+            </p>
+            <p>
+              <span class="sentence" data-note="">这对读书软件也一样。</span>
+              <span class="sentence" data-note="">它不应该先和 Apple Books 比书架、动画或云同步。</span>
+              <span class="sentence" data-note="">它应该先把“读到一句话时马上能记录判断”这件事做到极顺。</span>
+            </p>
+            <p>
+              <span class="sentence" data-note="">句子级批注的价值在于降低摩擦。</span>
+              <span class="sentence" data-note="">用户不需要拖选文字，也不需要打断阅读去整理格式。</span>
+              <span class="sentence" data-note="">点到一句话，系统就知道用户想处理的是整句。</span>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <aside class="notes" id="notesRail">
+        <div class="notes-head">
+          <span>当前书笔记</span>
+          <button class="icon" title="收起">›</button>
+        </div>
+        <div class="filter">
+          <span class="chip active">全部</span>
+          <span class="chip">备注</span>
+          <span class="chip">标红</span>
+        </div>
+        <div class="section">第 3 章</div>
+        <div class="note-row active">
+          <div class="note-kind"><span class="marker"></span>备注</div>
+          <div>真正有效的定位，不是把产品说得更漂亮...</div>
+          <div class="meta">定位的重点不是表达自己，而是占住对方已有的分类。</div>
+        </div>
+        <div class="note-row">
+          <div class="note-kind"><span class="marker red"></span>标红</div>
+          <div>如果一个市场已经有清晰的第一名...</div>
+          <div class="meta">右键/双指点按整句标红</div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <section class="floating-editor" id="editor" aria-label="备注编辑器">
+    <div class="editor-title">添加句子备注</div>
+    <div class="quote" id="editorQuote">真正有效的定位，不是把产品说得更漂亮，而是在用户心智里找到一个可以被占据的位置。</div>
+    <textarea id="noteText">定位的重点不是表达自己，而是占住对方已有的分类。</textarea>
+    <div class="editor-actions">
+      <button id="cancelEditor">取消</button>
+      <button class="primary" id="saveEditor">保存</button>
+    </div>
+  </section>
+
+  <nav class="context-menu" id="contextMenu">
+    <div class="menu-item" id="toggleHighlight">切换红色标注</div>
+    <div class="menu-item" id="editNote">添加/编辑备注</div>
+    <div class="menu-item">复制句子</div>
+    <div class="menu-item">复制句子和备注</div>
+  </nav>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const contextMenu = document.getElementById('contextMenu');
+    const editorQuote = document.getElementById('editorQuote');
+    const noteText = document.getElementById('noteText');
+    let activeSentence = document.querySelector('.sentence.focused');
+
+    function focusSentence(sentence) {
+      document.querySelectorAll('.sentence.focused').forEach(item => item.classList.remove('focused'));
+      activeSentence = sentence;
+      sentence.classList.add('focused');
+    }
+
+    function openEditor(sentence) {
+      focusSentence(sentence);
+      editorQuote.textContent = sentence.textContent.trim();
+      noteText.value = sentence.dataset.note || '';
+      editor.classList.add('open');
+      contextMenu.classList.remove('open');
+      noteText.focus();
+    }
+
+    document.querySelectorAll('.sentence').forEach(sentence => {
+      sentence.addEventListener('click', () => focusSentence(sentence));
+      sentence.addEventListener('dblclick', () => openEditor(sentence));
+      sentence.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        focusSentence(sentence);
+        contextMenu.style.left = `${event.clientX}px`;
+        contextMenu.style.top = `${event.clientY}px`;
+        contextMenu.classList.add('open');
+        editor.classList.remove('open');
+      });
+    });
+
+    document.getElementById('cancelEditor').addEventListener('click', () => {
+      editor.classList.remove('open');
+    });
+
+    document.getElementById('saveEditor').addEventListener('click', () => {
+      if (activeSentence) {
+        activeSentence.dataset.note = noteText.value.trim();
+        activeSentence.classList.toggle('has-note', noteText.value.trim().length > 0);
+      }
+      editor.classList.remove('open');
+    });
+
+    document.getElementById('readerEntry').addEventListener('click', () => {
+      document.querySelector('.reader').scrollTo({ top: 0, behavior: 'smooth' });
+      const firstSentence = document.querySelector('.sentence');
+      if (firstSentence) {
+        focusSentence(firstSentence);
+      }
+      contextMenu.classList.remove('open');
+      editor.classList.remove('open');
+    });
+
+    document.getElementById('toggleHighlight').addEventListener('click', () => {
+      if (activeSentence) {
+        activeSentence.classList.toggle('highlighted');
+      }
+      contextMenu.classList.remove('open');
+    });
+
+    document.getElementById('editNote').addEventListener('click', () => {
+      if (activeSentence) {
+        openEditor(activeSentence);
+      }
+    });
+
+    document.getElementById('toggleNotes').addEventListener('click', () => {
+      const rail = document.getElementById('notesRail');
+      rail.style.display = rail.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    document.addEventListener('click', event => {
+      if (!contextMenu.contains(event.target) && !event.target.classList.contains('sentence')) {
+        contextMenu.classList.remove('open');
+      }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        contextMenu.classList.remove('open');
+        editor.classList.remove('open');
+      }
+      if (event.metaKey && event.key === 'Enter') {
+        document.getElementById('saveEditor').click();
+      }
+    });
+  </script>
+</body>
+</html>
