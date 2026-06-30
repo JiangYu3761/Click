@@ -12,6 +12,9 @@ Sentence Reader Library V2 uses a single-system, reading-first main interface:
 - Book-card hover must not reveal high-priority management actions. Secondary actions such as 收藏, 单词, and 详情 live in a low-priority row under the card content.
 - Library removal is a management-mode action: click 管理, select one or more books, then use the batch bar. A single selected book is the single-book path; the details drawer only offers 选择管理.
 - On macOS, the embedded Library/Vocabulary WebView must leave the transparent titlebar row to a native draggable strip, so the red/yellow/green control area remains usable for moving the window.
+- The Library dashboard must recover owned EPUB copies already stored under app support, so a missing PostgreSQL index does not make previously imported books disappear.
+- The Mac Library WebView owns EPUB import through a native macOS open panel; `导入 EPUB` must not silently fail.
+- The top-left brand is the product name `Click` only, without placeholder icons or explanatory tagline copy.
 - Technical and file-management details are moved into settings, details, or advanced disclosure.
 - Mac reading always resolves through `sentence-reader://open-native?book_id=...` into the existing native sentence-level reader.
 - iPad/browser reading keeps `/library` and `/lan/reader`.

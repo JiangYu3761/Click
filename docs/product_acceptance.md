@@ -9,11 +9,13 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Open the packaged Mac app from the Dock or build folder.
 - Open the app directly into the `书库` main interface, which loads `http://127.0.0.1:18180/library?surface=mac-app` in the main Mac window when Reader API is available.
 - Drag and move the Mac window from the red/yellow/green titlebar row; the embedded Library/Vocabulary web surface must not cover that macOS window-control area.
+- See previously imported owned EPUB copies after restart; the Library API must rescan `~/Library/Application Support/SentenceReader/Books/*/book.epub` and re-register missing internal books without requiring the original source file.
 - See a Library V2 reading-first home page: `继续阅读` is the first task, recent books appear below it, and recent notes/red highlights are visible as knowledge assets.
 - Return from正文 to `书库` in the same main window; the app must not open a second library window for normal use.
 - See all known books as a cover wall with progress, reading state, note count, and red-highlight count.
 - Click a book cover/card to continue reading directly; hover must not promote 收藏/单词/详情/delete into a floating action layer. Secondary actions live below the card, and remove/hide lives in explicit management mode or batch controls.
 - Import EPUBs, reveal the internal EPUB copy, export, and remove books from the library list without deleting notes or data.
+- Click `导入 EPUB` in the Mac Library WebView and get the native macOS file picker.
 - Use dedicated `笔记` and `红标` centers instead of treating them only as book filters.
 - Search across book title, author, notes, and red-highlight text.
 - Keep the stable library data contract available through `/api/library/dashboard`.

@@ -3704,6 +3704,7 @@ def library_recent_annotations(limit: int = 80) -> list[dict[str, Any]]:
 
 
 def library_dashboard_payload(include_hidden: bool = False) -> dict[str, Any]:
+    owned_scan = sync_owned_epub_library()
     with db.connect() as conn:
         rows = conn.execute(
             """
@@ -3784,6 +3785,7 @@ def library_dashboard_payload(include_hidden: bool = False) -> dict[str, Any]:
             "ui": "Tabler-style local web shell",
             "structure_reference": "Komga-style library/book/progress organization",
             "external_system_embedded": False,
+            "owned_epub_scan": owned_scan,
         },
         "summary": {
             "book_count": len(visible_books),
@@ -3900,6 +3902,74 @@ def import_library_epub(payload: LibraryImport) -> dict[str, Any]:
         "owned_internal_copy": True,
         "original_source_can_be_deleted": True,
     }
+
+
+def sync_owned_epub_library() -> dict[str, Any]:
+    if os.getenv("SENTENCE_READER_SKIP_OWNED_EPUB_SCAN") == "1":
+        return {"scanned": 0, "imported": 0, "skipped": 0, "errors": [], "disabled": True}
+    books_dir = app_support_books_dir()
+    if not books_dir.exists():
+        return {"scanned": 0, "imported": 0, "skipped": 0, "errors": []}
+
+    imported = 0
+    skipped = 0
+    errors: list[dict[str, str]] = []
+    for epub_path in sorted(books_dir.glob("*/book.epub")):
+        root_name = epub_path.parent.name
+        try:
+            publication = epub_publication(epub_path)
+        except HTTPException as exc:
+            skipped += 1
+            errors.append({"path": str(epub_path), "reason": str(exc.detail)})
+            continue
+
+        title = str(publication.get("title") or epub_path.parent.name).strip() or epub_path.parent.name
+        author = str(publication.get("author") or "").strip() or None
+        byte_size = epub_path.stat().st_size
+        book_hash = root_name
+        book_id = stable_id("book", "owned-epub", book_hash)
+        with db.connect() as conn:
+            book = conn.execute(
+                """
+                INSERT INTO reader.books (id, title, author, source_kind, book_hash, created_at, updated_at, last_opened_at)
+                VALUES (%s, %s, %s, 'epub', %s, now(), now(), NULL)
+                ON CONFLICT (book_hash) DO UPDATE
+                SET title = EXCLUDED.title,
+                    author = EXCLUDED.author,
+                    updated_at = now()
+                RETURNING *
+                """,
+                (book_id, title, author, book_hash),
+            ).fetchone()
+            conn.execute(
+                """
+                INSERT INTO reader.book_files (id, book_id, file_path, file_kind, file_hash, byte_size)
+                VALUES (%s, %s, %s, 'epub', %s, %s)
+                ON CONFLICT (book_id, file_path) DO UPDATE
+                SET file_hash = EXCLUDED.file_hash,
+                    byte_size = EXCLUDED.byte_size
+                """,
+                (stable_id("file", book["id"], str(epub_path)), book["id"], str(epub_path), book_hash, byte_size),
+            )
+            conn.execute(
+                """
+                INSERT INTO reader.library_state (book_id, hidden, source, metadata, created_at, updated_at)
+                VALUES (%s, false, %s, %s, now(), now())
+                ON CONFLICT (book_id) DO UPDATE
+                SET hidden = reader.library_state.hidden,
+                    source = EXCLUDED.source,
+                    metadata = reader.library_state.metadata || EXCLUDED.metadata,
+                    updated_at = now()
+                """,
+                (
+                    book["id"],
+                    "owned_epub_scan",
+                    db.jsonb({"owned_internal_copy": True, "root_name": root_name, "scan_path": str(epub_path)}),
+                ),
+            )
+        imported += 1
+
+    return {"scanned": imported + skipped, "imported": imported, "skipped": skipped, "errors": errors}
 
 
 def hide_library_books(book_ids: list[str], *, source: str) -> dict[str, Any]:
@@ -4393,10 +4463,8 @@ def library_page_html_v2() -> str:
     input:focus, select:focus { border-color:rgba(215,168,79,.75); box-shadow:0 0 0 3px rgba(215,168,79,.12); }
     .app-shell { min-height:100vh; display:grid; grid-template-columns:232px minmax(0,1fr); }
     .sidebar { border-right:1px solid var(--line); background:linear-gradient(180deg,#11130d,#090a07); padding:22px 15px; position:sticky; top:0; height:100vh; }
-    .brand { display:flex; gap:11px; align-items:center; margin-bottom:22px; }
-    .brand-mark { width:38px; height:38px; border-radius:10px; background:linear-gradient(145deg,var(--accent),var(--jade)); display:grid; place-items:center; color:#17120a; font-weight:900; box-shadow:0 10px 30px rgba(228,180,83,.22); }
-    .brand strong { display:block; font-size:15px; }
-    .brand span { color:var(--muted); font-size:12px; }
+    .brand { margin-bottom:22px; }
+    .brand strong { display:block; font-size:22px; line-height:1.1; letter-spacing:0; }
     .nav { display:grid; gap:7px; }
     .nav button { width:100%; display:flex; align-items:center; justify-content:space-between; background:transparent; color:var(--soft); text-align:left; }
     .nav button.active { background:#222719; color:var(--text); box-shadow:inset 3px 0 0 var(--accent); }
@@ -4513,7 +4581,7 @@ def library_page_html_v2() -> str:
 <body>
   <div class="app-shell" data-library-v2="true" data-native-reader-contract="sentence-reader://open-native">
     <aside class="sidebar">
-      <div class="brand"><div class="brand-mark">C</div><div><strong>Click</strong><span>点击读懂</span></div></div>
+      <div class="brand"><strong>Click</strong></div>
       <nav class="nav" id="nav"></nav>
       <div class="side-action">
         <button class="primary" id="sideImport">导入 EPUB</button>

@@ -1530,7 +1530,7 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var notesRail: NSVisualEffectView!
@@ -1945,6 +1945,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
         return webView
     }
@@ -2864,6 +2865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.setValue(false, forKey: "drawsBackground")
         window.contentView = webView
         if let url = URL(string: "http://127.0.0.1:18180/library?surface=mac-app") {
@@ -2872,6 +2874,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         window.center()
         statusLabel.stringValue = "已打开产品级书库主界面；旧书库表格仅作降级入口"
         return NSWindowController(window: window)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        let panel = NSOpenPanel()
+        panel.title = "导入 EPUB"
+        panel.prompt = "导入"
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.epub]
+        panel.begin { response in
+            completionHandler(response == .OK ? panel.urls : nil)
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

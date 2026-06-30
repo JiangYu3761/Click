@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 from contextlib import contextmanager
+import os
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -182,6 +183,8 @@ def main() -> int:
             "batchExport",
             "epub_cover_asset",
             "generated_cover_svg",
+            "sync_owned_epub_library",
+            "owned_epub_scan",
             "native_reader_url",
             "get('surface') === 'mac-app'",
             "does_not_delete_notes",
@@ -202,6 +205,9 @@ def main() -> int:
             "preferredIPadLibraryURL",
             "readerMoreButton",
             "showReaderMoreMenu",
+            "WKUIDelegate",
+            "runOpenPanelWith",
+            "allowedContentTypes = [.epub]",
             "旧书库表格仅作降级入口",
         ],
         MIGRATION: [
@@ -215,6 +221,7 @@ def main() -> int:
             missing_markers[str(path)] = missing
 
     conn = FakeConn()
+    os.environ["SENTENCE_READER_SKIP_OWNED_EPUB_SCAN"] = "1"
     with fake_db(conn):
         client = TestClient(app_module.app)
         page = client.get("/library")
@@ -251,6 +258,9 @@ def main() -> int:
             for forbidden in ["card-actions", "drawerHide"]:
                 if forbidden in page.text:
                     missing_markers.setdefault("/library", []).append(f"forbidden_hover_or_delete:{forbidden}")
+            for forbidden in ["点击读懂", "brand-mark"]:
+                if forbidden in page.text:
+                    missing_markers.setdefault("/library", []).append(f"forbidden_brand:{forbidden}")
 
         dashboard = client.get("/api/library/dashboard")
         if dashboard.status_code != 200:
