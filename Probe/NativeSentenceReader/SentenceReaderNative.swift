@@ -38,6 +38,10 @@ private enum SpeechTranscriptionProvider: String {
     }
 }
 
+private final class WindowDragView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+}
+
 final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
     private weak var textView: NSTextView?
     private weak var statusLabel: NSTextField?
@@ -1538,6 +1542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     private var libraryWindowUsesWebUI = false
     private var mainRootView: NSView?
     private var libraryHomeWebView: WKWebView?
+    private var mainTitlebarDragView: NSView?
     private var libraryTableView: NSTableView?
     private var librarySummaryLabel: NSTextField?
     private var didShowFirstRunGuide = false
@@ -1953,6 +1958,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return
         }
         libraryHomeWebView.isHidden = false
+        mainTitlebarDragView?.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
         window.title = "Click 书库"
@@ -1961,6 +1967,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
 
     private func hideMainLibraryForReading() {
         libraryHomeWebView?.isHidden = true
+        mainTitlebarDragView?.isHidden = true
         window.title = "Click"
         revealReaderChromeTemporarily()
     }
@@ -2105,8 +2112,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         notesRail = makeNotesRail()
 
         let libraryWebView = makeMainLibraryWebView()
+        let titlebarDragView = WindowDragView()
+        titlebarDragView.wantsLayer = true
+        titlebarDragView.layer?.backgroundColor = NSColor.black.cgColor
 
-        [header, headerStack, webView, notesRail, footer, footerStack, libraryWebView].forEach {
+        [header, headerStack, webView, notesRail, footer, footerStack, libraryWebView, titlebarDragView].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         notesRailWidthConstraint = notesRail.widthAnchor.constraint(equalToConstant: 0)
@@ -2119,6 +2129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         root.addSubview(footer)
         footer.addSubview(footerStack)
         root.addSubview(libraryWebView)
+        root.addSubview(titlebarDragView)
 
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: root.topAnchor),
@@ -2149,7 +2160,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             footerStack.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -10),
             footerStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
 
-            libraryWebView.topAnchor.constraint(equalTo: root.topAnchor),
+            titlebarDragView.topAnchor.constraint(equalTo: root.topAnchor),
+            titlebarDragView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            titlebarDragView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            titlebarDragView.heightAnchor.constraint(equalToConstant: 36),
+
+            libraryWebView.topAnchor.constraint(equalTo: titlebarDragView.bottomAnchor),
             libraryWebView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             libraryWebView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             libraryWebView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -2171,6 +2187,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         mainRootView = root
         libraryHomeWebView = libraryWebView
         libraryWebView.isHidden = true
+        mainTitlebarDragView = titlebarDragView
+        titlebarDragView.isHidden = true
         readerHeaderView = header
         readerFooterView = footer
         setReaderChromeVisible(false)
@@ -3367,6 +3385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             return
         }
         libraryHomeWebView.isHidden = false
+        mainTitlebarDragView?.isHidden = false
         libraryHomeWebView.load(URLRequest(url: url))
         setReaderChromeVisible(false)
         window.title = "Click 单词本"

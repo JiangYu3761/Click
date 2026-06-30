@@ -8,6 +8,7 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 
 - Open the packaged Mac app from the Dock or build folder.
 - Open the app directly into the `书库` main interface, which loads `http://127.0.0.1:18180/library?surface=mac-app` in the main Mac window when Reader API is available.
+- Drag and move the Mac window from the red/yellow/green titlebar row; the embedded Library/Vocabulary web surface must not cover that macOS window-control area.
 - See a Library V2 reading-first home page: `继续阅读` is the first task, recent books appear below it, and recent notes/red highlights are visible as knowledge assets.
 - Return from正文 to `书库` in the same main window; the app must not open a second library window for normal use.
 - See all known books as a cover wall with progress, reading state, note count, and red-highlight count.
