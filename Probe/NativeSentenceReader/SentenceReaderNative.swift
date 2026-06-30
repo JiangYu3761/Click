@@ -40,6 +40,10 @@ private enum SpeechTranscriptionProvider: String {
 
 private final class WindowDragView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
 }
 
 final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
@@ -2161,7 +2165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             footerStack.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
 
             titlebarDragView.topAnchor.constraint(equalTo: root.topAnchor),
-            titlebarDragView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            titlebarDragView.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 86),
             titlebarDragView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             titlebarDragView.heightAnchor.constraint(equalToConstant: 36),
 
@@ -2181,6 +2185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
+        window.isMovableByWindowBackground = true
         window.acceptsMouseMovedEvents = true
         window.contentView = root
         window.center()
