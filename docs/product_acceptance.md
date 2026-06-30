@@ -11,7 +11,7 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - See a Library V2 reading-first home page: `继续阅读` is the first task, recent books appear below it, and recent notes/red highlights are visible as knowledge assets.
 - Return from正文 to `书库` in the same main window; the app must not open a second library window for normal use.
 - See all known books as a cover wall with progress, reading state, note count, and red-highlight count.
-- Click a book cover/card to continue reading directly; management actions must live in the details drawer or batch controls.
+- Click a book cover/card to continue reading directly; hover must not promote 收藏/单词/详情/delete into a floating action layer. Secondary actions live below the card, and remove/hide lives in explicit management mode or batch controls.
 - Import EPUBs, reveal the internal EPUB copy, export, and remove books from the library list without deleting notes or data.
 - Use dedicated `笔记` and `红标` centers instead of treating them only as book filters.
 - Search across book title, author, notes, and red-highlight text.

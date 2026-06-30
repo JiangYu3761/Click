@@ -4435,8 +4435,9 @@ def library_page_html_v2() -> str:
     .progress i { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); width:0; }
     .rail { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(150px, 190px); gap:12px; overflow:auto; padding-bottom:4px; }
     .book-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(178px,1fr)); gap:14px; }
-    .book-card { position:relative; min-width:0; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; transition:transform .12s ease, border-color .12s ease, background .12s ease; }
-    .book-card:hover, .book-card:focus { transform:translateY(-2px); border-color:rgba(215,168,79,.62); background:#1c1d16; outline:none; }
+    .book-card { position:relative; min-width:0; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; transition:border-color .12s ease, background .12s ease; }
+    .book-card:hover, .book-card:focus { border-color:rgba(215,168,79,.62); background:#1c1d16; outline:none; }
+    .book-card.selected { border-color:var(--accent); box-shadow:0 0 0 1px rgba(228,180,83,.25); }
     .book-card .cover-frame { margin-bottom:10px; }
     .book-title { font-weight:800; line-height:1.32; min-height:39px; word-break:break-word; }
     .book-meta { color:var(--muted); font-size:12px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -4444,11 +4445,11 @@ def library_page_html_v2() -> str:
     .badge { font-size:11px; color:var(--soft); border:1px solid var(--line); border-radius:999px; padding:3px 7px; background:#11120f; }
     .badge.state { color:#11120f; background:var(--jade); border-color:var(--jade); font-weight:800; }
     .badge.red { color:#ffc1b7; border-color:rgba(217,133,106,.4); }
-    .card-check { position:absolute; z-index:4; left:12px; top:12px; width:18px; height:18px; accent-color:var(--accent); }
-    .card-actions { position:absolute; z-index:2; right:12px; top:12px; display:flex; gap:6px; opacity:0; transform:translateY(-4px); pointer-events:none; transition:opacity .14s ease, transform .14s ease; }
-    .book-card:hover .card-actions, .book-card:focus-within .card-actions { opacity:1; transform:translateY(0); pointer-events:auto; }
-    .card-action { padding:4px 8px; min-height:28px; background:rgba(0,0,0,.54); border:1px solid rgba(255,255,255,.12); }
-    .card-action.danger { background:rgba(233,120,107,.22); border-color:rgba(233,120,107,.48); color:#ffd0ca; }
+    .card-check { display:none; position:absolute; z-index:4; left:12px; top:12px; width:18px; height:18px; accent-color:var(--accent); }
+    .book-card.selectable .card-check { display:block; }
+    .card-secondary { margin-top:10px; padding-top:9px; border-top:1px solid rgba(255,255,255,.07); display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    .card-action { padding:5px 6px; min-height:30px; background:transparent; border:1px solid rgba(255,255,255,.08); color:var(--muted); font-size:12px; }
+    .card-action:hover { color:var(--text); border-color:rgba(228,180,83,.32); background:rgba(228,180,83,.06); }
     .toolbar { display:grid; grid-template-columns:minmax(180px,1fr) 140px 140px auto auto; gap:10px; margin-bottom:14px; align-items:center; }
     .batchbar { display:none; align-items:center; justify-content:space-between; gap:10px; border:1px solid rgba(215,168,79,.3); background:rgba(215,168,79,.09); border-radius:10px; padding:10px 12px; margin-bottom:12px; }
     .batchbar.show { display:flex; }
@@ -4459,7 +4460,8 @@ def library_page_html_v2() -> str:
     .group-list { display:grid; gap:18px; }
     .group-panel { border:1px solid var(--line); background:rgba(255,255,255,.025); border-radius:8px; padding:14px; }
     .group-panel h2 { margin:0 0 12px; font-size:18px; display:flex; justify-content:space-between; gap:10px; }
-    .favorite-mark { position:absolute; z-index:2; left:38px; top:12px; min-width:24px; height:24px; border-radius:999px; display:grid; place-items:center; color:#1a1408; background:var(--accent); font-weight:900; box-shadow:0 8px 24px rgba(0,0,0,.32); }
+    .favorite-mark { position:absolute; z-index:2; left:12px; top:12px; min-width:24px; height:24px; border-radius:999px; display:grid; place-items:center; color:#1a1408; background:var(--accent); font-weight:900; box-shadow:0 8px 24px rgba(0,0,0,.32); }
+    .book-card.selectable .favorite-mark { left:38px; }
     .org-panel { border:1px solid rgba(228,180,83,.22); background:rgba(228,180,83,.055); border-radius:8px; padding:12px; margin-top:12px; display:grid; gap:9px; }
     .org-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; }
     .org-tags { display:flex; flex-wrap:wrap; gap:6px; }
@@ -4503,8 +4505,7 @@ def library_page_html_v2() -> str:
       .manifest-item { padding:8px 6px; text-align:center; }
       .manifest-item strong { font-size:13px; }
       .manifest-item span { display:none; }
-      .card-actions { position:static; opacity:1; transform:none; pointer-events:auto; margin:0 0 8px; justify-content:space-between; }
-      .card-action { flex:1 1 0; padding:4px 6px; }
+      .card-secondary { grid-template-columns:1fr; }
       .book-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
   </style>
@@ -4553,10 +4554,10 @@ def library_page_html_v2() -> str:
             <option value="已读">已读</option>
             <option value="搁置">搁置</option>
           </select>
-          <button class="subtle" id="selectAll">全选当前</button>
+          <button class="subtle" id="manageToggle">管理</button>
           <button class="primary" id="libraryImport">导入</button>
         </div>
-        <div id="batchbar" class="batchbar"><span id="batchCount">已选择 0 本</span><span><button class="subtle" id="batchClear">清空选择</button> <button class="subtle" id="batchFavorite">批量收藏</button> <button class="subtle" id="batchOrganize">批量分类</button> <button class="subtle" id="batchExport">批量导出</button> <button class="danger" id="batchHide">批量移出书库</button></span></div>
+        <div id="batchbar" class="batchbar"><span id="batchCount">管理模式 · 已选择 0 本</span><span><button class="subtle" id="selectAllCurrent">全选当前</button> <button class="subtle" id="batchClear">清空选择</button> <button class="subtle" id="batchExit">退出管理</button> <button class="subtle" id="batchFavorite">批量收藏</button> <button class="subtle" id="batchOrganize">批量分类</button> <button class="subtle" id="batchExport">批量导出</button> <button class="danger" id="batchHide">移出书库</button></span></div>
         <section id="bookGrid" class="book-grid"></section>
       </section>
 
@@ -4598,7 +4599,7 @@ def library_page_html_v2() -> str:
   <input id="fileInput" type="file" accept=".epub,application/epub+zip" hidden>
   <div id="toast" class="toast"></div>
   <script>
-    const state = { dashboard:null, books:[], hiddenBooks:[], assets:[], view:'home', query:'', sort:'recent', stateFilter:'all', selectedBook:null, activeBookId:null, selectedIds:new Set(), pendingRemove:null, lastRemoved:null, lastImport:null, error:null };
+    const state = { dashboard:null, books:[], hiddenBooks:[], assets:[], view:'home', query:'', sort:'recent', stateFilter:'all', manageMode:false, selectedBook:null, activeBookId:null, selectedIds:new Set(), pendingRemove:null, lastRemoved:null, lastImport:null, error:null };
     const $ = (id) => document.getElementById(id);
     const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const isMacAppSurface = () => new URLSearchParams(window.location.search).get('surface') === 'mac-app';
@@ -4696,20 +4697,36 @@ def library_page_html_v2() -> str:
       const org = book.organization || {};
       const favorite = org.favorite ? '<div class="favorite-mark" title="已收藏">★</div>' : '';
       const favoriteLabel = org.favorite ? '取消收藏' : '收藏';
-      return `<article class="book-card" tabindex="0" data-book="${esc(book.id)}" data-open-book-card="true">
+      const modeClass = state.manageMode ? 'selectable' : '';
+      const selectedClass = state.selectedIds.has(book.id) ? 'selected' : '';
+      return `<article class="book-card ${modeClass} ${selectedClass}" tabindex="0" data-book="${esc(book.id)}" data-open-book-card="true">
         <input class="card-check" type="checkbox" data-select="${esc(book.id)}" ${checked} aria-label="选择书籍">
         ${favorite}
-        <div class="card-actions">
-          <button class="card-action" data-favorite="${esc(book.id)}">${favoriteLabel}</button>
-          <button class="card-action" data-vocab="${esc(book.id)}">单词</button>
-          <button class="card-action" data-details="${esc(book.id)}">详情</button>
-        </div>
         ${cover(book)}
         <div class="book-title">${esc(book.title || book.id)}</div>
         <div class="book-meta">${esc(book.author || '未知作者')}</div>
         <div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div>
         <div class="book-row"><span class="badge state">${esc(book.reading_state || '未开始')}</span><span class="badge">${progressText(book)}</span><span class="badge">${esc(org.category || '未分类')}</span><span class="badge">${book.counts?.notes || 0} 笔记</span><span class="badge red">${book.counts?.red_highlights || 0} 红标</span></div>
+        <div class="card-secondary" data-card-secondary="true">
+          <button class="card-action" data-favorite="${esc(book.id)}">${favoriteLabel}</button>
+          <button class="card-action" data-vocab="${esc(book.id)}">单词</button>
+          <button class="card-action" data-details="${esc(book.id)}">详情</button>
+        </div>
       </article>`;
+    }
+    function syncBookSelection(id) {
+      document.querySelectorAll(`[data-book="${CSS.escape(id)}"]`).forEach((card) => {
+        const selected = state.selectedIds.has(id);
+        card.classList.toggle('selected', selected);
+        const box = card.querySelector('[data-select]');
+        if (box) box.checked = selected;
+      });
+      renderBatchbar();
+    }
+    function toggleBookSelection(id) {
+      if (!id) return;
+      if (state.selectedIds.has(id)) state.selectedIds.delete(id); else state.selectedIds.add(id);
+      syncBookSelection(id);
     }
     function bindBookCards() {
       document.querySelectorAll('[data-open-book-card]').forEach((card) => {
@@ -4717,6 +4734,7 @@ def library_page_html_v2() -> str:
           if (event.target.closest('button') || event.target.closest('input')) return;
           const book = byId(card.dataset.book);
           state.activeBookId = book?.id || null;
+          if (state.manageMode) { toggleBookSelection(book?.id); return; }
           openBook(book);
         };
         card.onfocus = () => { state.activeBookId = card.dataset.book; };
@@ -4733,7 +4751,7 @@ def library_page_html_v2() -> str:
       });
       document.querySelectorAll('[data-select]').forEach((box) => box.onchange = () => {
         if (box.checked) state.selectedIds.add(box.dataset.select); else state.selectedIds.delete(box.dataset.select);
-        renderBatchbar();
+        syncBookSelection(box.dataset.select);
       });
     }
     async function updateBookOrganization(book, payload, message = '已更新') {
@@ -4827,8 +4845,10 @@ def library_page_html_v2() -> str:
     }
     function renderBatchbar() {
       const count = state.selectedIds.size;
-      $('batchbar').classList.toggle('show', count > 0);
-      $('batchCount').textContent = `已选择 ${count} 本`;
+      $('batchbar').classList.toggle('show', state.manageMode || count > 0);
+      $('manageToggle').textContent = state.manageMode ? '退出管理' : '管理';
+      $('batchCount').textContent = state.manageMode ? `管理模式 · 已选择 ${count} 本` : `已选择 ${count} 本`;
+      ['batchClear','batchFavorite','batchOrganize','batchExport','batchHide'].forEach((id) => { $(id).disabled = count === 0; });
     }
     function openRemoveModal(bookIds) {
       const ids = Array.from(new Set(bookIds.filter(Boolean)));
@@ -4955,7 +4975,7 @@ def library_page_html_v2() -> str:
       const favoriteText = org.favorite ? '取消收藏' : '收藏';
       const categoryOptions = Array.from(new Set((state.dashboard?.category_groups || []).map((group) => group.category).filter(Boolean))).filter((name) => name !== '未分类');
       const chips = (org.tags || []).length ? `<div class="org-tags">${org.tags.map((tag) => `<span class="badge">${esc(tag)}</span>`).join('')}</div>` : '';
-      $('drawer').innerHTML = `<button class="ghost" id="drawerClose">关闭</button>${cover(book)}<h2>${esc(book.title || book.id)}</h2><div class="book-meta">${esc(book.author || '未知作者')} · ${esc(book.reading_state || '')}</div><div class="book-row"><span class="badge">${esc(org.category || '未分类')}</span>${org.favorite ? '<span class="badge">已收藏</span>' : ''}</div><div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div><div class="drawer-actions"><button class="primary" id="drawerOpen">继续阅读</button><button class="subtle" id="drawerFavorite">${favoriteText}</button><button class="subtle" id="drawerVocab">单词本</button><button class="subtle" data-view-jump="notes">笔记</button><button class="subtle" data-view-jump="red">红标</button><button class="subtle" id="drawerReveal">显示副本</button><button class="subtle" id="drawerExport">导出</button><button class="danger" id="drawerHide">移出书库</button></div><section class="org-panel"><strong>自定义分类</strong><div class="org-row"><input id="categoryField" list="categoryList" value="${esc(org.custom_category || '')}" placeholder="例如：战略、英语、属灵书籍"><button class="primary" id="saveCategory">保存</button></div><datalist id="categoryList">${categoryOptions.map((name) => `<option value="${esc(name)}"></option>`).join('')}</datalist><strong>标签</strong><div class="org-row"><input id="tagField" value="${esc(tagText)}" placeholder="用逗号分隔，例如：面试,精读,复习"><button class="subtle" id="saveTags">保存</button></div>${chips}</section><details><summary>高级信息</summary><p>文件存在：${book.file?.exists ? '是' : '否'}<br>内部副本：${book.file?.owned_internal_copy ? '是' : '否'}<br>${esc(book.file?.file_path || '')}</p></details>`;
+      $('drawer').innerHTML = `<button class="ghost" id="drawerClose">关闭</button>${cover(book)}<h2>${esc(book.title || book.id)}</h2><div class="book-meta">${esc(book.author || '未知作者')} · ${esc(book.reading_state || '')}</div><div class="book-row"><span class="badge">${esc(org.category || '未分类')}</span>${org.favorite ? '<span class="badge">已收藏</span>' : ''}</div><div class="progress"><i style="width:${book.progress?.percent || 0}%"></i></div><div class="drawer-actions"><button class="primary" id="drawerOpen">继续阅读</button><button class="subtle" id="drawerFavorite">${favoriteText}</button><button class="subtle" id="drawerVocab">单词本</button><button class="subtle" data-view-jump="notes">笔记</button><button class="subtle" data-view-jump="red">红标</button><button class="subtle" id="drawerReveal">显示副本</button><button class="subtle" id="drawerExport">导出</button><button class="subtle" id="drawerManage">选择管理</button></div><section class="org-panel"><strong>自定义分类</strong><div class="org-row"><input id="categoryField" list="categoryList" value="${esc(org.custom_category || '')}" placeholder="例如：战略、英语、属灵书籍"><button class="primary" id="saveCategory">保存</button></div><datalist id="categoryList">${categoryOptions.map((name) => `<option value="${esc(name)}"></option>`).join('')}</datalist><strong>标签</strong><div class="org-row"><input id="tagField" value="${esc(tagText)}" placeholder="用逗号分隔，例如：面试,精读,复习"><button class="subtle" id="saveTags">保存</button></div>${chips}</section><details><summary>高级信息</summary><p>文件存在：${book.file?.exists ? '是' : '否'}<br>内部副本：${book.file?.owned_internal_copy ? '是' : '否'}<br>${esc(book.file?.file_path || '')}</p></details>`;
       $('drawer').classList.add('open');
       $('drawer').setAttribute('aria-hidden', 'false');
       $('drawerBackdrop').classList.add('show');
@@ -4965,12 +4985,12 @@ def library_page_html_v2() -> str:
       $('drawerVocab').onclick = () => { window.location.href = vocabURL(book.id); };
       $('drawerReveal').onclick = async () => { await api(`/api/library/books/${book.id}/reveal`, {method:'POST'}); toast('已在 Finder 显示'); };
       $('drawerExport').onclick = async () => { await api(`/books/${book.id}/export`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({include_json:true})}); toast('导出完成'); };
+      $('drawerManage').onclick = () => { state.manageMode = true; state.selectedIds.add(book.id); closeDrawer(); setView('library'); toast('已进入管理模式，可移出单本或批量整理'); };
       $('saveCategory').onclick = () => updateBookOrganization(book, {custom_category:$('categoryField').value}, '分类已保存').catch((error) => toast(`保存失败：${error.message}`));
       $('saveTags').onclick = () => {
         const tags = $('tagField').value.split(/[，,]/).map((item) => item.trim()).filter(Boolean);
         updateBookOrganization(book, {tags}, '标签已保存').catch((error) => toast(`保存失败：${error.message}`));
       };
-      $('drawerHide').onclick = () => hideSingleBook(book).catch((error) => toast(`移出失败：${error.message}`));
       document.querySelectorAll('#drawer [data-view-jump]').forEach((button) => button.onclick = () => setView(button.dataset.viewJump));
     }
     function closeDrawer() { $('drawer').classList.remove('open'); $('drawer').setAttribute('aria-hidden', 'true'); $('drawerBackdrop').classList.remove('show'); }
@@ -5021,13 +5041,19 @@ def library_page_html_v2() -> str:
     $('stateFilter').onchange = (event) => { state.stateFilter = event.target.value; render(); };
     $('refresh').onclick = () => loadDashboard().catch((error) => { state.error = error.message; render(); });
     ['topImport','sideImport','libraryImport'].forEach((id) => $(id).onclick = () => $('fileInput').click());
-    $('selectAll').onclick = () => {
+    $('manageToggle').onclick = () => {
+      state.manageMode = !state.manageMode;
+      if (!state.manageMode) state.selectedIds.clear();
+      render();
+    };
+    $('selectAllCurrent').onclick = () => {
       const books = sortedBooks();
       const allSelected = books.length > 0 && books.every((book) => state.selectedIds.has(book.id));
       books.forEach((book) => allSelected ? state.selectedIds.delete(book.id) : state.selectedIds.add(book.id));
       renderLibrary();
     };
     $('batchClear').onclick = () => { state.selectedIds.clear(); renderLibrary(); };
+    $('batchExit').onclick = () => { state.manageMode = false; state.selectedIds.clear(); render(); };
     $('batchFavorite').onclick = () => favoriteSelectedBooks().catch((error) => toast(`批量收藏失败：${error.message}`));
     $('batchOrganize').onclick = openBatchOrgModal;
     $('batchHide').onclick = () => batchHide().catch((error) => toast(`移出失败：${error.message}`));

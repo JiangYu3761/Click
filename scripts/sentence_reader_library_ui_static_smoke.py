@@ -168,6 +168,11 @@ def main() -> int:
             "data-library-v2",
             "continue-hero",
             "data-open-book-card",
+            "data-card-secondary",
+            "manageMode",
+            "manageToggle",
+            "selectAllCurrent",
+            "drawerManage",
             "recentAssets",
             "notesView",
             "redView",
@@ -232,7 +237,10 @@ def main() -> int:
                 "批量收藏",
                 "批量分类",
                 "批量导出",
-                "批量移出书库",
+                "移出书库",
+                "管理模式",
+                "退出管理",
+                "选择管理",
                 "搜索书名、作者、分类、标签、笔记、红标",
             ]:
                 if marker not in page.text:
@@ -240,6 +248,9 @@ def main() -> int:
             for forbidden in ["Reader API + PostgreSQL", "Tabler 只做", "Komga 只做"]:
                 if forbidden in page.text:
                     missing_markers.setdefault("/library", []).append(f"forbidden_visible:{forbidden}")
+            for forbidden in ["card-actions", "drawerHide"]:
+                if forbidden in page.text:
+                    missing_markers.setdefault("/library", []).append(f"forbidden_hover_or_delete:{forbidden}")
 
         dashboard = client.get("/api/library/dashboard")
         if dashboard.status_code != 200:

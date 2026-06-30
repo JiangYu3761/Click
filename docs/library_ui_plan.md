@@ -1,6 +1,6 @@
 # Sentence Reader Library UI Plan
 
-Updated: 2026-06-26
+Updated: 2026-06-30
 
 ## Decision
 
@@ -9,6 +9,8 @@ Sentence Reader Library V2 uses a single-system, reading-first main interface:
 - The home page is a reading product surface, not a system management panel.
 - The first screen prioritizes `继续阅读`, recent books, and recent knowledge assets.
 - Book cards are real entry points: clicking the cover/card opens the current book.
+- Book-card hover must not reveal high-priority management actions. Secondary actions such as 收藏, 单词, and 详情 live in a low-priority row under the card content.
+- Library removal is a management-mode action: click 管理, select one or more books, then use the batch bar. A single selected book is the single-book path; the details drawer only offers 选择管理.
 - Technical and file-management details are moved into settings, details, or advanced disclosure.
 - Mac reading always resolves through `sentence-reader://open-native?book_id=...` into the existing native sentence-level reader.
 - iPad/browser reading keeps `/library` and `/lan/reader`.
@@ -81,11 +83,11 @@ The `/library` page provides:
 - left navigation: 首页, 书库, 笔记, 红标, 设置
 - top controls: global search, refresh, import
 - home: large `继续阅读` hero, recent reading rail, recent notes/red highlights
-- library: cover wall, reading state, progress, note/red counts, batch actions
+- library: cover wall, reading state, progress, note/red counts, low-priority card secondary actions, explicit management mode, and batch actions
 - notes: true note center, not just a book filter
 - red: true highlight/excerpt center, not just a book filter
 - settings: readable service/iPad/import status
-- details drawer: cover, progress, open, note/red shortcuts, reveal, export, non-destructive remove, advanced file details
+- details drawer: cover, progress, open, note/red shortcuts, reveal, export, choose-for-management, and advanced file details
 
 The Mac App must not use `/lan/reader` as its final reading surface. `/lan/reader` is the same-LAN browser/iPad surface. The library UI is only a management shell on Mac; the original native reader owns the Mac reading experience so the same book does not render differently depending on whether the user clicked `打开` or `书库 -> 继续阅读`.
 
