@@ -28,6 +28,10 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 | iPad 正文句子 | 慢慢点两次 | 两次点击，不等于双击 |
 | iPad 句子操作栏 | 点 `红标` | 整句标红 / 取消标红 |
 | iPad 阅读页 | 左右滑动 | 翻页 |
+| 桌面 Web / Windows 路线 | 聚焦句子后 `N` | 添加备注 |
+| 桌面 Web / Windows 路线 | 聚焦句子后 `R` | 整句标红 / 取消标红 |
+| 桌面 Web / Windows 路线 | 聚焦句子后 `V` | 添加语音备注 |
+| 桌面 Web / Windows 路线 | `Esc` | 关闭弹窗、抽屉或取消聚焦 |
 
 `双击` means two quick clicks/taps inside the system double-click interval. Two slow clicks/taps are intentionally treated as two separate single-click actions.
 
@@ -44,6 +48,7 @@ This does not change macOS or iPadOS globally. It only decides which events the 
 | Active text selection outside sentence text | Context menu | System/WebKit | Show copy/search/share actions |
 | Inputs, textareas, buttons, controls | Click, context menu, keyboard | System/WebKit | Preserve editing, copy, paste, focus, button activation |
 | Page surface | Horizontal wheel/swipe or page keys | Sentence Reader | Turn page once with cooldown |
+| Desktop Web / Windows route focused sentence | N / R / V | Sentence Reader | Note, red highlight, or voice note |
 | Overlays/sheets | Esc | Sentence Reader first | Close sheet/toast/focus before falling through |
 
 ## Hard Rule

@@ -2,24 +2,26 @@
 from __future__ import annotations
 
 import argparse
+import uuid
 from typing import Optional
 
 import httpx
 
 
-BOOK_HASH = "reader-api-http-smoke-book"
+BOOK_HASH_PREFIX = "reader-api-http-smoke-book"
 DEFAULT_BASE_URL = "http://127.0.0.1:18180"
 DEFAULT_DATABASE_URL = "postgresql://localhost/sentence_reader"
 
 
-def cleanup(database_url: str, book_id: Optional[str]) -> None:
+def cleanup(database_url: str, book_id: Optional[str], book_hash: Optional[str]) -> None:
     try:
         import psycopg
 
         with psycopg.connect(database_url) as conn:
             if book_id:
                 conn.execute("DELETE FROM reader.books WHERE id = %s", (book_id,))
-            conn.execute("DELETE FROM reader.books WHERE book_hash = %s", (BOOK_HASH,))
+            if book_hash:
+                conn.execute("DELETE FROM reader.books WHERE book_hash = %s", (book_hash,))
             conn.commit()
     except Exception:
         pass
@@ -37,6 +39,7 @@ def main() -> int:
     parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL)
     args = parser.parse_args()
 
+    book_hash = f"{BOOK_HASH_PREFIX}-{uuid.uuid4().hex}"
     book_id: Optional[str] = None
     try:
         with httpx.Client(base_url=args.base_url, timeout=5.0) as client:
@@ -51,7 +54,7 @@ def main() -> int:
                         "title": "Reader API HTTP Smoke",
                         "author": "Codex",
                         "source_kind": "epub",
-                        "book_hash": BOOK_HASH,
+                        "book_hash": book_hash,
                     },
                 ),
                 "book create",
@@ -99,7 +102,7 @@ def main() -> int:
         print(f"reader api http smoke FAIL: {exc}")
         return 1
     finally:
-        cleanup(args.database_url, book_id)
+        cleanup(args.database_url, book_id, book_hash)
 
 
 if __name__ == "__main__":

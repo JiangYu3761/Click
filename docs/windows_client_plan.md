@@ -25,6 +25,7 @@ The Windows route is a platform packaging route, not a new reading engine.
 | iPad / browser | Current same-LAN usable client | Same-Wi-Fi browser access through `/library` and `/lan/reader` |
 | Windows browser version | Planned first Windows step | Local Reader API plus browser-opened `http://localhost:18180/library` |
 | Windows desktop version | Planned later shell | `Click.exe` with WebView2 or Tauri opening `/library` |
+| Windows reader shortcuts | Implemented in the shared Web reader layer | Reused by the future Windows browser version and desktop shell |
 
 Windows is not currently described as completed.
 
@@ -47,6 +48,7 @@ Acceptance:
 - `/library` opens in a Windows browser.
 - A book can be opened and read.
 - Add text notes, add voice notes when the browser path is available, red-highlight sentences, look up English words, and restore reading position.
+- Reuse the shared Web reader keyboard contract: `N` for note, `R` for red highlight, `V` for voice note, `Esc` to close, arrows/PageUp/PageDown to turn pages.
 
 ## P2: Windows Desktop Shell
 
@@ -96,6 +98,8 @@ Shortcut design:
 - Shortcut icon: the reading-themed Click icon.
 - Uninstall should remove the Start Menu shortcut and desktop shortcut if the installer created them.
 
+This installer and shortcut behavior is not implemented yet. It is the P3 completion target, not a current product claim.
+
 ## Windows Reading Interaction
 
 Windows should follow computer-native expectations instead of copying macOS gestures.
@@ -103,23 +107,27 @@ Windows should follow computer-native expectations instead of copying macOS gest
 | Action | Windows interaction |
 | --- | --- |
 | Add text note | Quick double-click a sentence |
-| Add voice note | Use voice in the note window or sentence action bar |
+| Add text note with keyboard | Focus a sentence, then press `N` |
+| Add voice note | Use voice in the note window or sentence action bar, or focus a sentence and press `V` |
 | Red-highlight whole sentence | Select the sentence, then use the sentence action bar `Red` action |
+| Red-highlight with keyboard | Focus a sentence, then press `R` |
 | Look up English word | Single-click the English word |
 | Copy text | Select text, then press `Ctrl+C` |
 | Close popup or drawer | `Esc` |
+| Turn page | Arrow keys, `PageUp`, or `PageDown` |
 
 Right-click should not be the main red-highlight path. It should remain available for normal copy/search/system expectations where appropriate.
 
 ## Voice Notes
 
-Windows should not default to cloud speech recognition.
+Windows should not default to cloud speech recognition or to the operating-system speech layer.
 
 Priority:
 
-1. Browser or WebView recording upload to local Reader API.
-2. Optional local speech engine such as FunASR or another local runtime.
-3. Manual text note fallback.
+1. Click software-layer voice path: browser/WebView recording upload to local Reader API, then local transcription.
+2. Optional local speech engine such as FunASR or another bundled/local runtime.
+3. Windows system or browser speech recognition only as a fallback/backup path.
+4. Manual text note fallback.
 
 Online speech can be a future opt-in feature only. It is not part of this Windows plan.
 
@@ -138,4 +146,5 @@ The next real Windows implementation should start with P1:
 1. Verify Reader API starts on Windows.
 2. Verify PostgreSQL setup instructions are enough.
 3. Verify `/library` and the Web reader work in a Windows browser.
-4. Only after that, decide between WebView2 and Tauri for P2.
+4. Verify the Web reader keyboard contract on Windows: `N`, `R`, `V`, `Esc`, arrows, PageUp, and PageDown.
+5. Only after that, decide between WebView2 and Tauri for P2.

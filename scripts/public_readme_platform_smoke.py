@@ -20,10 +20,14 @@ README_REQUIRED = [
     "计划优先支持",
     "Windows 桌面版",
     "后续规划",
+    "Windows 快捷键",
+    "Web 层已实现基础键盘契约",
     "Windows 不重写阅读器",
     "Reader API",
     "Web 主界面",
     "Web 阅读器",
+    "软件层本地识别优先",
+    "系统语音识别只能作为备选",
 ]
 
 WINDOWS_PLAN_REQUIRED = [
@@ -35,6 +39,11 @@ WINDOWS_PLAN_REQUIRED = [
     "Click.exe",
     "desktop shortcut",
     "Start Menu shortcut",
+    "Windows reader shortcuts",
+    "N` for note",
+    "R` for red highlight",
+    "V` for voice note",
+    "system or browser speech recognition only as a fallback",
     "Do not rewrite a Windows native reader",
     "Do not create a second database",
 ]

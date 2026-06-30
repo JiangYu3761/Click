@@ -2,24 +2,26 @@
 from __future__ import annotations
 
 import argparse
+import uuid
 from typing import Optional
 
 import httpx
 
 
-BOOK_HASHES = ("reader-api-v15-multibook-a", "reader-api-v15-multibook-b")
+BOOK_HASH_PREFIXES = ("reader-api-v15-multibook-a", "reader-api-v15-multibook-b")
 DEFAULT_BASE_URL = "http://127.0.0.1:18180"
 DEFAULT_DATABASE_URL = "postgresql://localhost/sentence_reader"
 
 
-def cleanup(database_url: str, book_ids: list[str]) -> None:
+def cleanup(database_url: str, book_ids: list[str], book_hashes: Optional[list[str]] = None) -> None:
     try:
         import psycopg
 
         with psycopg.connect(database_url) as conn:
             for book_id in book_ids:
                 conn.execute("DELETE FROM reader.books WHERE id = %s", (book_id,))
-            conn.execute("DELETE FROM reader.books WHERE book_hash = ANY(%s)", (list(BOOK_HASHES),))
+            if book_hashes:
+                conn.execute("DELETE FROM reader.books WHERE book_hash = ANY(%s)", (book_hashes,))
             conn.commit()
     except Exception:
         pass
@@ -37,9 +39,9 @@ def main() -> int:
     parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL)
     args = parser.parse_args()
 
+    book_hashes = [f"{prefix}-{uuid.uuid4().hex}" for prefix in BOOK_HASH_PREFIXES]
     book_ids: list[str] = []
     try:
-        cleanup(args.database_url, [])
         with httpx.Client(base_url=args.base_url, timeout=5.0) as client:
             health = assert_ok(client.get("/health"), "health")
             if not isinstance(health, dict) or not health.get("ok"):
@@ -51,7 +53,7 @@ def main() -> int:
                     json={
                         "title": "V1.5 Multi Book A",
                         "source_kind": "epub",
-                        "book_hash": BOOK_HASHES[0],
+                        "book_hash": book_hashes[0],
                         "file_path": "/tmp/sentence-reader-v15-a.epub",
                     },
                 ),
@@ -63,7 +65,7 @@ def main() -> int:
                     json={
                         "title": "V1.5 Multi Book B",
                         "source_kind": "epub",
-                        "book_hash": BOOK_HASHES[1],
+                        "book_hash": book_hashes[1],
                         "file_path": "/tmp/sentence-reader-v15-b.epub",
                     },
                 ),
@@ -76,7 +78,7 @@ def main() -> int:
             listed = assert_ok(client.get("/books"), "book list")
             assert isinstance(listed, list)
             listed_hashes = {item["book_hash"] for item in listed}
-            if not set(BOOK_HASHES).issubset(listed_hashes):
+            if not set(book_hashes).issubset(listed_hashes):
                 raise RuntimeError(f"multi-book list missing hashes: {listed}")
 
             assert_ok(
@@ -154,7 +156,7 @@ def main() -> int:
         print(f"reader api multibook smoke FAIL: {exc}")
         return 1
     finally:
-        cleanup(args.database_url, book_ids)
+        cleanup(args.database_url, book_ids, book_hashes)
 
 
 if __name__ == "__main__":

@@ -21,16 +21,16 @@ private enum SpeechTranscriptionProvider: String {
         guard let raw = UserDefaults.standard.string(forKey: defaultsKey),
               let provider = SpeechTranscriptionProvider(rawValue: raw)
         else {
-            return .appleSpeech
+            return .funASR
         }
         return provider
     }
 
     static func fromTitle(_ title: String?) -> SpeechTranscriptionProvider {
-        if title == SpeechTranscriptionProvider.funASR.title {
-            return .funASR
+        if title == SpeechTranscriptionProvider.appleSpeech.title {
+            return .appleSpeech
         }
-        return .appleSpeech
+        return .funASR
     }
 
     static func save(_ provider: SpeechTranscriptionProvider) {
@@ -187,7 +187,8 @@ final class NoteSpeechController: NSObject, AVAudioRecorderDelegate {
             } catch {
                 DispatchQueue.main.async {
                     self.latestAudioNoteID = audioNoteID
-                    self.failTranscription("FunASR 转写失败：\(error.localizedDescription)", audioNoteID: audioNoteID)
+                    self.updateStatus("FunASR 转写失败，正在改用系统语音识别...")
+                    self.transcribeWithAppleSpeech(audioURL: audioURL, audioNoteID: audioNoteID)
                 }
             }
         }
@@ -1177,7 +1178,7 @@ private final class RuntimeEnvironmentWindowController: NSWindowController {
         self.openPath = openPath
         funASRPythonField.stringValue = funasrPython
         funASRWorkerField.stringValue = funasrWorker
-        speechProviderPopup.addItems(withTitles: [SpeechTranscriptionProvider.appleSpeech.title, SpeechTranscriptionProvider.funASR.title])
+        speechProviderPopup.addItems(withTitles: [SpeechTranscriptionProvider.funASR.title, SpeechTranscriptionProvider.appleSpeech.title])
         speechProviderPopup.selectItem(withTitle: speechProvider.title)
 
         let window = NSWindow(
@@ -4638,7 +4639,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         recordButton.frame = NSRect(x: 0, y: 6, width: 92, height: 28)
 
         let providerPopup = NSPopUpButton(frame: NSRect(x: 104, y: 6, width: 92, height: 28), pullsDown: false)
-        providerPopup.addItems(withTitles: [SpeechTranscriptionProvider.appleSpeech.title, SpeechTranscriptionProvider.funASR.title])
+        providerPopup.addItems(withTitles: [SpeechTranscriptionProvider.funASR.title, SpeechTranscriptionProvider.appleSpeech.title])
         providerPopup.selectItem(withTitle: SpeechTranscriptionProvider.current.title)
 
         let speechStatus = NSTextField(labelWithString: "")

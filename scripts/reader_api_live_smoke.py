@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
@@ -15,17 +16,18 @@ from reader_api.app import app
 from reader_api.config import database_url
 
 
-BOOK_HASH = "reader-api-live-smoke-book"
+BOOK_HASH_PREFIX = "reader-api-live-smoke-book"
 
 
-def cleanup(book_id: Optional[str]) -> None:
+def cleanup(book_id: Optional[str], book_hash: Optional[str]) -> None:
     try:
         import psycopg
 
         with psycopg.connect(database_url()) as conn:
             if book_id:
                 conn.execute("DELETE FROM reader.books WHERE id = %s", (book_id,))
-            conn.execute("DELETE FROM reader.books WHERE book_hash = %s", (BOOK_HASH,))
+            if book_hash:
+                conn.execute("DELETE FROM reader.books WHERE book_hash = %s", (book_hash,))
             conn.commit()
     except Exception:
         pass
@@ -33,6 +35,7 @@ def cleanup(book_id: Optional[str]) -> None:
 
 def main() -> int:
     client = TestClient(app)
+    book_hash = f"{BOOK_HASH_PREFIX}-{uuid.uuid4().hex}"
     book_id: Optional[str] = None
     try:
         health = client.get("/health")
@@ -45,7 +48,7 @@ def main() -> int:
                 "title": "Reader API Live Smoke",
                 "author": "Codex",
                 "source_kind": "epub",
-                "book_hash": BOOK_HASH,
+                "book_hash": book_hash,
             },
         )
         if book.status_code != 200:
@@ -105,7 +108,7 @@ def main() -> int:
         print(f"reader api live smoke BLOCKED: {exc}")
         return 2
     finally:
-        cleanup(book_id)
+        cleanup(book_id, book_hash)
 
 
 if __name__ == "__main__":

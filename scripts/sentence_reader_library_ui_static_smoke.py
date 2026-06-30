@@ -217,7 +217,7 @@ def main() -> int:
             missing_markers["/library"] = [f"status={page.status_code}"]
         else:
             for marker in [
-                "<title>Click</title>",
+                "<title>Sentence Reader Library</title>",
                 "data-library-v2",
                 "Click",
                 "Continue Reading",

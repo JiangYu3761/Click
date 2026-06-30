@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import tempfile
 import sys
 from pathlib import Path
@@ -17,17 +16,86 @@ if str(ROOT) not in sys.path:
 from reader_api.app import app
 
 
-COGNITIVE_ROOT = Path(
-    str(Path.home() / "Library" / "Application Support" / "SentenceReader" / "CognitiveOS")
-)
-
-
 def copy_cognitive_build_support(root: Path) -> None:
     scripts_dir = root / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
-    for name in ["compile_cognitive_intake.py", "build_active_cognitive_pack.py"]:
-        shutil.copy2(COGNITIVE_ROOT / "scripts" / name, scripts_dir / name)
-    shutil.copy2(COGNITIVE_ROOT / "routing_manifest.json", root / "routing_manifest.json")
+    (scripts_dir / "compile_cognitive_intake.py").write_text(
+        """#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    if not target or not target.exists():
+        print("missing intake path")
+        return 1
+    data = json.loads(target.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or not data.get("intake_id"):
+        print("invalid intake")
+        return 1
+    print(json.dumps({"ok": True, "intake_id": data["intake_id"]}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        encoding="utf-8",
+    )
+    (scripts_dir / "build_active_cognitive_pack.py").write_text(
+        """#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main() -> int:
+    intakes_dir = ROOT / "intakes"
+    compiled_dir = ROOT / "compiled_packs"
+    compiled_dir.mkdir(parents=True, exist_ok=True)
+    items = []
+    for path in sorted(intakes_dir.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        items.append({"path": str(path), "intake_id": data.get("intake_id"), "source_type": data.get("source_type")})
+    pack = {
+        "schema": "sentence_reader.active_cognitive_pack.smoke.v1",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "intake_count": len(items),
+        "items": items,
+    }
+    for name in ["active_cognitive_pack.json", "merged_active_pack_v1_5.json"]:
+        (compiled_dir / name).write_text(json.dumps(pack, ensure_ascii=False, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+    print(json.dumps({"ok": True, "intake_count": len(items)}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        encoding="utf-8",
+    )
+    (root / "routing_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema": "sentence_reader.cognitive_os_routing_manifest.smoke.v1",
+                "routes": [{"source": "sentence_reader", "target": "intakes"}],
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_ready_draft(cognitive_root: Path) -> Path:

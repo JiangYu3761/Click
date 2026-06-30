@@ -34,13 +34,13 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Keep normal Mac app quitting behavior: `Command+Q` exits Sentence Reader.
 - Keep `docs/interaction_contract.md` and `scripts/sentence_reader_interaction_contract_smoke.py` passing before changing any sentence/system gesture boundary.
 - Persist books, reading position, highlights, notes, audio-note state, exports, and sync events through Reader API and PostgreSQL.
-- Let the user choose Mac voice transcription provider in the UI; Apple Speech is the default, and FunASR is optional local transcription.
+- Let the user choose Mac voice transcription provider in the UI; Click's software-layer local recognition path (`FunASR`) is the default, and Apple Speech is the backup/system provider.
 - Open the iPad LAN reader at `http://<mac-lan-ip>:18180/lan/reader` on the same Wi-Fi.
 - Open the iPad LAN library at `http://<mac-lan-ip>:18180/library` on the same Wi-Fi.
 - Example LAN URL format: `http://<mac-lan-ip>:18180/lan/reader`.
 - Use the iPad LAN reader with hidden目录 drawer, full-screen正文, swipe/page buttons, persisted highlights/notes/position, bottom sentence action bar, font-size settings, return-to-library control, and clear voice fallback.
 - Keep iPad reading chrome compact: top controls must not look like a management toolbar, sentence actions should float only after selection, and hidden controls must not leave a large unused bottom area under the last line.
-- Treat Windows as a planned platform route, not part of the current accepted product. Windows P1/P2/P3 are documented in `docs/windows_client_plan.md` and must not be described as completed before their own implementation and verification pass.
+- Treat Windows as a planned platform route, not part of the current accepted product. The shared Web reader keyboard contract for the Windows route is implemented (`N` note, `R` red highlight, `V` voice note, `Esc`, arrows/PageUp/PageDown), but Windows P1/P2/P3 are documented in `docs/windows_client_plan.md` and must not be described as completed before their own implementation and verification pass.
 
 ## Hard Checks
 
@@ -125,7 +125,7 @@ Stop this round when:
 1. The code changes are limited to stability, persistence, iPad LAN, voice fallback, tests, and docs.
 2. The hard checks pass.
 3. The live Reader API has exactly one listener on port `18180`, bound to all interfaces.
-4. Voice transcription provider selection is available; FunASR health is optional unless the selected provider is FunASR.
+4. Voice transcription provider selection is available; FunASR is the default software-layer local path, Apple Speech is the backup, and FunASR health is optional unless the selected/default local path is being verified.
 5. The native app opens directly to the `书库` main interface in the main window.
 6. The native app exposes a real Library V2 interface through `/library`, not only a quick switch menu or fallback table.
 7. The first screen has `继续阅读`, recent reading, and recent notes/red highlights; it must not present engineering architecture copy as user-facing content.

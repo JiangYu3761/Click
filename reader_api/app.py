@@ -1512,6 +1512,7 @@ def lan_reader_html() -> str:
     window.addEventListener('keydown', (event) => {
       if (event.defaultPrevented) return;
       if (shouldLetSystemHandle(event)) return;
+      const key = String(event.key || '').toLowerCase();
       if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
         event.preventDefault();
         turnPage(-1);
@@ -1521,6 +1522,25 @@ def lan_reader_html() -> str:
         event.preventDefault();
         turnPage(1);
         return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && state.focused) {
+        const readerKeyboardContract = 'reader-keyboard-note-red-voice-v1';
+        if (key === 'n') {
+          event.preventDefault();
+          addNote().catch((error) => status(`备注失败：${error.message || error}`));
+          return;
+        }
+        if (key === 'r') {
+          event.preventDefault();
+          toggleRed().catch((error) => status(`红标失败：${error.message || error}`));
+          return;
+        }
+        if (key === 'v') {
+          event.preventDefault();
+          startVoiceNote();
+          return;
+        }
+        void readerKeyboardContract;
       }
       if (event.key === 'Escape') {
         event.preventDefault();
