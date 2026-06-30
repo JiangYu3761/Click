@@ -40,6 +40,7 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Example LAN URL format: `http://<mac-lan-ip>:18180/lan/reader`.
 - Use the iPad LAN reader with hidden目录 drawer, full-screen正文, swipe/page buttons, persisted highlights/notes/position, bottom sentence action bar, font-size settings, return-to-library control, and clear voice fallback.
 - Keep iPad reading chrome compact: top controls must not look like a management toolbar, sentence actions should float only after selection, and hidden controls must not leave a large unused bottom area under the last line.
+- Treat Windows as a planned platform route, not part of the current accepted product. Windows P1/P2/P3 are documented in `docs/windows_client_plan.md` and must not be described as completed before their own implementation and verification pass.
 
 ## Hard Checks
 
@@ -52,6 +53,7 @@ The product-grade check is not a single manual glance. It requires:
 - `swiftc Probe/NativeSentenceReader/SentenceReaderNative.swift -o /tmp/SentenceReaderNativeProductCheck -framework Cocoa -framework WebKit -framework AVFoundation -framework Speech`
 - `python3 scripts/package_sentence_reader_app.py`
 - `python3 scripts/public_repo_privacy_smoke.py`
+- `python3 scripts/public_readme_platform_smoke.py`
 - `python3 scripts/sentence_reader_import_ownership_static_smoke.py`
 - `python3 scripts/sentence_reader_interaction_contract_smoke.py`
 - `python3 scripts/sentence_reader_vocab_lookup_static_smoke.py`
@@ -100,7 +102,7 @@ The product-grade check is not a single manual glance. It requires:
 
 The current version is product-grade for local EPUB reading on this Mac and trusted same-LAN iPad browser reading, with a functional native book library manager.
 
-It is not yet a public-network, multi-device account, signed installer, native iPad product, or polished visual bookshelf.
+It is not yet a public-network, multi-device account, signed installer, native iPad product, polished visual bookshelf, or Windows client. Windows is currently a planned route: P1 browser version, P2 WebView2/Tauri `Click.exe`, and P3 installer with shortcut and diagnostics behavior.
 
 Latest verification on 2026-06-25 repeated the hard checks and live readiness smoke without finding a new code-level blocker. This means the right stop condition is to keep the current product boundary stable instead of adding new feature scope.
 
@@ -110,7 +112,7 @@ Repeat verification on 2026-06-26 added the native `书库` management interface
 
 The Library V2 UI adds a reading-first home page, cover endpoint, direct book-card opening, details drawer, note center, red-highlight center, batch actions, and iPad `/library` access. It remains one Sentence Reader system and does not introduce a second reader.
 
-2026-06-26 iPad touch refinement added bottom sentence actions, `Aa` reading settings, long-press red highlight, and `书库` return from `/lan/reader` to `/library`. This fixes the product problem where sentence-level operations were too far away in the top toolbar and the reader had no obvious route back to the main interface.
+2026-06-26 iPad touch refinement added bottom sentence actions, `Aa` reading settings, red highlight through the sentence action bar, and `书库` return from `/lan/reader` to `/library`. This fixes the product problem where sentence-level operations were too far away in the top toolbar and the reader had no obvious route back to the main interface.
 
 Repeat verification after the iPad touch refinement passed `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, Reader API pytest, Python compileall, Swift compile, package build, iPad static/API smoke, Library V2 smoke, live product readiness smoke, and live `/library` + `/lan/reader` marker checks. Current verified iPad URLs: library `http://<mac-lan-ip>:18180/library`, direct reader `http://<mac-lan-ip>:18180/lan/reader`.
 

@@ -1,6 +1,6 @@
 # Sentence Reader Current Status
 
-Updated: 2026-06-29
+Updated: 2026-06-30
 
 ## Current Stage
 
@@ -8,13 +8,15 @@ V2.1 is now the daily-use product-grade boundary for this Mac: PostgreSQL data b
 
 日常可用产品级 in this project means local EPUB reading, source-independent EPUB imports, sentence-level annotations, notes, voice-note persistence, reading position restore, Reader API/PostgreSQL durability, packaged Mac app access, selectable Mac voice transcription with Apple Speech as the default and FunASR as an optional local provider, and same-Wi-Fi iPad browser reading at the current Mac LAN URL, for example `http://<mac-lan-ip>:18180/lan/reader`.
 
+Current platform boundary: macOS App is the primary usable client, and iPad/browser same-LAN access is currently usable through `/library` and `/lan/reader`. Windows is a planned route, not a completed client. The Windows plan is documented in `docs/windows_client_plan.md`: P1 is a Windows browser version using local Reader API plus `http://localhost:18180/library`; P2 is a `Click.exe` shell using WebView2 or Tauri; P3 is an installer with Start Menu shortcut, optional desktop shortcut, runtime, logs, diagnostics, and uninstall cleanup.
+
 Source-independent import rule: after Sentence Reader reports that an EPUB has been imported, the original EPUB path is no longer a runtime dependency. The app copies and verifies the book at `~/Library/Application Support/SentenceReader/Books/<book_hash>/book.epub`, normalizes saved book-library records to that owned path, and only registers the owned path with Reader API/PostgreSQL. The user may delete or move the original source file after import.
 
 The product acceptance boundary is documented in `docs/product_acceptance.md`; the live service smoke is `scripts/sentence_reader_product_readiness_smoke.py`.
 
 Latest verification on 2026-06-26: Library V2 changes the Mac app main interface from a management-panel style book list into a reading-first product home. The app still opens `http://127.0.0.1:18180/library?surface=mac-app` in the main window, but the visible first task is now `继续阅读`, followed by recent books and recent notes/red highlights. Book cards use real EPUB cover extraction when possible and generated book covers otherwise. Clicking a cover/card opens the selected book through `sentence-reader://open-native?book_id=...` into the original native sentence reader; iPad/browser access still uses `/lan/reader`. Notes and red highlights now have dedicated centers, while file paths and advanced status are moved into the details drawer or settings. The reader chrome remains simplified to `书库`, `目录`, `笔记`, `设置`, and `更多`.
 
-Latest iPad LAN touch verification on 2026-06-26: `/lan/reader` now uses a touch-first interaction model. Tap sentence opens a bottom sentence action bar; long press toggles red highlight; `Aa` controls font size, line height, and side padding; `书库` returns to `/library?book_id=...`. Validation passed `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, Reader API pytest, Python compileall, Swift compile, package build, iPad static/API smoke, Library V2 smoke, live product readiness smoke, and live `/library` + `/lan/reader` marker checks. Current verified LAN URLs: library `http://<mac-lan-ip>:18180/library`, direct reader `http://<mac-lan-ip>:18180/lan/reader`.
+Latest iPad LAN touch verification on 2026-06-26: `/lan/reader` now uses a touch-first interaction model. Tap sentence opens a bottom sentence action bar for red highlight, note, voice note, copy, and cancel; `Aa` controls font size, line height, and side padding; `书库` returns to `/library?book_id=...`. Validation passed `v1_acceptance.sh`, `v21_ipad_lan_acceptance.sh`, Reader API pytest, Python compileall, Swift compile, package build, iPad static/API smoke, Library V2 smoke, live product readiness smoke, and live `/library` + `/lan/reader` marker checks. Current verified LAN URLs: library `http://<mac-lan-ip>:18180/library`, direct reader `http://<mac-lan-ip>:18180/lan/reader`.
 
 Latest iPad compact-chrome refinement on 2026-06-26: `/lan/reader` now reduces visible control space again. The top toolbar is shorter, previous/next controls are arrow buttons, the bottom sentence action bar is a compact floating pill, and正文 no longer permanently reserves a large 96px bottom padding for hidden controls. `v21_ipad_lan_acceptance.sh`, static/API smoke, live product readiness smoke, and live compact chrome marker checks passed after the change. Current verified direct reader URL: `http://<mac-lan-ip>:18180/lan/reader`.
 
@@ -267,6 +269,7 @@ The existing V1 native reading shell already supports:
 Still outside the current local-reader scope:
 
 - public internet access, user accounts, HTTPS certificate management, WebSocket live sync, and a native iPad app are not implemented yet.
+- Windows browser and desktop clients are planned but not implemented yet; the next boundary is P1 browser verification, not a rewritten Windows reader.
 - iPad browser microphone behavior depends on Safari permissions and secure-origin rules; the product fallback is audio capture/upload plus manual note if browser recording is blocked.
 - PDF annotation parity is not implemented yet.
 - Annotation Core V2 does not change the PostgreSQL schema; multi-sentence locators are stored through existing annotation metadata/range locator fields.

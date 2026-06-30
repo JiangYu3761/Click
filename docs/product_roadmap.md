@@ -33,6 +33,9 @@ The Mac app should not become a direct database client in the long term. It shou
 | V1.9 | Hermes/Cognitive OS sync | selected notes and reading models sync into Hermes/Cognitive OS |
 | V2.0 | Product packaging | Readium-grade engine boundary, installer, backup/restore, diagnostics |
 | V2.1 | iPad LAN Reader | trusted same-LAN browser reader using Reader API, shared books/annotations/positions |
+| Platform P1 | Windows browser route | planned: Windows runs local Reader API and opens `http://localhost:18180/library` |
+| Platform P2 | Windows desktop shell | planned: `Click.exe` with WebView2 or Tauri, reusing `/library` and the Web reader |
+| Platform P3 | Windows installer | planned: runtime, icon, diagnostics, Start Menu shortcut, optional desktop shortcut, uninstall cleanup |
 
 ## Current Priority
 
@@ -49,6 +52,8 @@ The current priority is product acceptance, not feature expansion. V2.1 is accep
 2026-06-29 Life-study vocabulary decision: Genesis is no longer blocked at the review gate. `Life-study Context Vocabulary Pipeline V1` has passed Genesis first 50 pages and Genesis full-run rule gates, imported only 25 A/B entries into the isolated `reader.domain_glossary_entries` boundary, imported the matching book-specific rows for `book_e0679064039e4e298e9faf3127b65876`, and applied the user-reviewed all-approve override through the explicit review apply command. `can_expand_next_volume=true` now applies only to controlled no-write probes, not to bulk production import. Exodus and Leviticus first-50 plus full no-write runs have completed, producing 19 Exodus A/B and 12 Leviticus A/B importable candidates with no database write. The corpus inventory now shows 51 processable Life-study volumes, with Genesis/Exodus/Leviticus full no-write complete and 48 volumes still needing first-50 no-write probes. All completed full no-write candidates are merged into `reports/lifestudy_vocab_corpus/lifestudy_master_vocab.csv/json/md` with source volume, page, evidence, and review status per term. Separately, all 51 processable volumes now feed one all-word master table at `reports/lifestudy_vocab_corpus/lifestudy_all_words_master.csv/json/md`, covering 38,166 unique normalized English words and 5,297,307 raw English tokens with source volume/page evidence. The implementation plan is `docs/lifestudy_vocab_pipeline_plan.md`.
 
 2026-06-29 voice provider decision: Mac voice notes should default to Apple Speech, with FunASR retained as an optional local provider. The app should not warm FunASR unless the selected provider is FunASR.
+
+2026-06-30 platform route decision: Click should present itself as one local reading system with multiple client entries. macOS App is the current primary usable client; iPad/browser same-LAN access is currently usable; Windows is a planned route. Windows should not rewrite the reader or introduce a second database. P1 is browser access with local Reader API, P2 is a WebView2 or Tauri `Click.exe` shell, and P3 is an installer with Start Menu and optional desktop shortcut behavior. Details live in `docs/windows_client_plan.md`.
 
 V1.2 is done only when:
 
@@ -295,7 +300,6 @@ V2.1 adds:
 - iPad voice note support through browser recording upload to Mac-side FunASR, with audio capture/upload and manual-note fallback
 - iPad note preview through a bottom note panel when a note-marked sentence is clicked
 - iPad bottom sentence action bar after tapping a sentence: red highlight, note, voice note, copy, and cancel
-- iPad long-press red highlight for quick touch reading
 - iPad `Aa` reading settings for font size, line height, and side padding
 - iPad `书库` navigation back to `/library?book_id=...`
 - iPad compact chrome: shorter top toolbar, arrow previous/next controls, compact bottom action pill, and reduced inactive bottom padding
