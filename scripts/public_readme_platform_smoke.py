@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 WINDOWS_PLAN = ROOT / "docs" / "windows_client_plan.md"
+PLATFORM_STATUS = ROOT / "docs" / "platform_status.md"
 
 
 README_REQUIRED = [
@@ -28,6 +29,7 @@ README_REQUIRED = [
     "Web 阅读器",
     "软件层本地识别优先",
     "系统语音识别只能作为备选",
+    "docs/platform_status.md",
 ]
 
 WINDOWS_PLAN_REQUIRED = [
@@ -46,6 +48,30 @@ WINDOWS_PLAN_REQUIRED = [
     "system or browser speech recognition only as a fallback",
     "Do not rewrite a Windows native reader",
     "Do not create a second database",
+]
+
+PLATFORM_STATUS_REQUIRED = [
+    "平台状态说明",
+    "当前真实状态",
+    "macOS",
+    "当前主力可用",
+    "iPad / 浏览器",
+    "当前局域网可用",
+    "Windows 浏览器版",
+    "计划优先支持",
+    "Windows 桌面版",
+    "后续规划",
+    "Windows 安装包和快捷方式",
+    "尚未实现",
+    "Windows 阅读快捷键",
+    "Web 层已实现",
+    "语音备注默认使用 Click 软件层本地识别",
+    "系统自带语音识别只是备选",
+    "FunASR",
+    "Apple 系统语音识别",
+    "Click.exe",
+    "开始菜单快捷方式",
+    "桌面快捷方式",
 ]
 
 FORBIDDEN_PATTERNS = [
@@ -75,7 +101,7 @@ def forbid_overclaims(path: Path, failures: list[str]) -> None:
 
 def main() -> int:
     failures: list[str] = []
-    for path in [README, WINDOWS_PLAN]:
+    for path in [README, WINDOWS_PLAN, PLATFORM_STATUS]:
         if not path.exists():
             failures.append(f"missing file: {path.relative_to(ROOT)}")
     if failures:
@@ -86,8 +112,10 @@ def main() -> int:
 
     require_contains(README, README_REQUIRED, failures)
     require_contains(WINDOWS_PLAN, WINDOWS_PLAN_REQUIRED, failures)
+    require_contains(PLATFORM_STATUS, PLATFORM_STATUS_REQUIRED, failures)
     forbid_overclaims(README, failures)
     forbid_overclaims(WINDOWS_PLAN, failures)
+    forbid_overclaims(PLATFORM_STATUS, failures)
 
     if failures:
         print("public readme platform smoke FAIL")
