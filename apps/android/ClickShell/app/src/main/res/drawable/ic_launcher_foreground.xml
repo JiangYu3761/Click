@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Click Focus: local app icon with reading, click, and light audio cues. -->
+    <path
+        android:fillColor="#1d2430"
+        android:pathData="M18,18h72a10,10 0,0 1,10 10v52a10,10 0,0 1,-10 10H18a10,10 0,0 1,-10 -10V28a10,10 0,0 1,10 -10z" />
+    <path
+        android:fillColor="#f7f2e7"
+        android:pathData="M26,28h22c7,0 13,6 13,13v38H39c-7,0 -13,-6 -13,-13z" />
+    <path
+        android:fillColor="#d8c7a6"
+        android:pathData="M58,28h22v38c0,7 -6,13 -13,13h-9z" />
+    <path
+        android:strokeColor="#15120a"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M38,45h13M38,56h10M66,45h8M66,56h8" />
+    <path
+        android:fillColor="#f0d36b"
+        android:pathData="M73,27a8,8 0,1 0,0.1 0z" />
+    <path
+        android:strokeColor="#f0d36b"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M76,75c4,-4 4,-9 0,-13M84,80c7,-8 7,-18 0,-26" />
+</vector>

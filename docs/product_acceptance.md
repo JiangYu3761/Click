@@ -40,10 +40,18 @@ Sentence Reader is accepted as a daily-use local reading product when these work
 - Let the user choose Mac voice transcription provider in the UI; Click's software-layer local recognition path (`FunASR`) is the default, and Apple Speech is the backup/system provider.
 - Open the iPad LAN reader at `http://<mac-lan-ip>:18180/lan/reader` on the same Wi-Fi.
 - Open the iPad LAN library at `http://<mac-lan-ip>:18180/library` on the same Wi-Fi.
+- Open the Mobile Workspace home at `http://<mac-lan-ip>:18180/home` on the same Wi-Fi and see only the three primary entries `阅读`, `录音`, and `Hermes`.
+- Use the mobile `阅读` entry to keep the existing `/library` and `/lan/reader` reading path.
+- Use the mobile `录音` entry to save new recordings into the independent `~/Documents/Recordings` total recording store with schema `local.recordings.audio_asset.v1`; the old Click Knowledge Inbox recording path is legacy read-only compatibility, and recording assets must not be stored in Hermes internal state or Marketplace OS.
+- Manage mobile recordings through list/detail/audio, manual title/category/tag editing, non-destructive hide, and reprocess dry-run; manual corrections must not be overwritten by processing unless explicitly allowed.
+- Use local mobile access control for phone clients: unapproved devices can request/poll access and view basic connection state, but durable recording upload and Hermes routes require local approval/token when a device ID is present. Mac localhost browser debugging remains available.
+- Use the mobile `Hermes` entry for text chat and temporary voice-message upload through the Mac-side Hermes runtime boundary; Hermes voice messages go to VoiceInbox and are separate from durable recording assets.
+- Use edge-tts voice reply only when the local edge-tts command is available, with `zh-CN-YunjianNeural` as the default voice; lack of TTS must still return text.
 - Example LAN URL format: `http://<mac-lan-ip>:18180/lan/reader`.
 - Use the iPad LAN reader with hidden目录 drawer, full-screen正文, swipe/page buttons, persisted highlights/notes/position, bottom sentence action bar, font-size settings, return-to-library control, and clear voice fallback.
 - Keep iPad reading chrome compact: top controls must not look like a management toolbar, sentence actions should float only after selection, and hidden controls must not leave a large unused bottom area under the last line.
 - Treat Windows as a planned platform route, not part of the current accepted product. The shared Web reader keyboard contract for the Windows route is implemented (`N` note, `R` red highlight, `V` voice note, `Esc`, arrows/PageUp/PageDown), but Windows P1/P2/P3 are documented in `docs/windows_client_plan.md` and must not be described as completed before their own implementation and verification pass.
+- Treat Android and iPad shells as local P1 clients, not public signed releases. Android debug APK builds are phone-test artifacts; iPad installation still requires Apple signing and a real-device install path.
 
 ## Hard Checks
 
@@ -57,6 +65,10 @@ The product-grade check is not a single manual glance. It requires:
 - `python3 scripts/package_sentence_reader_app.py`
 - `python3 scripts/public_repo_privacy_smoke.py`
 - `python3 scripts/public_readme_platform_smoke.py`
+- `python3 scripts/android_shell_static_smoke.py`
+- `python3 scripts/mobile_shell_static_smoke.py`
+- `python3 scripts/click_mobile_workspace_smoke.py`
+- `scripts/build_android_click_shell.sh`
 - `python3 scripts/sentence_reader_import_ownership_static_smoke.py`
 - `python3 scripts/sentence_reader_interaction_contract_smoke.py`
 - `python3 scripts/sentence_reader_vocab_lookup_static_smoke.py`
@@ -105,7 +117,7 @@ The product-grade check is not a single manual glance. It requires:
 
 The current version is product-grade for local EPUB reading on this Mac and trusted same-LAN iPad browser reading, with a functional native book library manager.
 
-It is not yet a public-network, multi-device account, signed installer, native iPad product, polished visual bookshelf, or Windows client. Windows is currently a planned route: P1 browser version, P2 WebView2/Tauri `Click.exe`, and P3 installer with shortcut and diagnostics behavior.
+It is not yet a public-network, multi-device account, signed installer, polished visual bookshelf, or Windows client. The iPad native shell P1 exists as a local SwiftUI + WKWebView scaffold, but it is not accepted as a signed/installable iPad product until the iOS destination build, Apple signing, and real-device install checks pass. The Android shell P1 exists as a local Activity + WebView scaffold and can produce a local debug APK, but it is not accepted as a finished Android app until real-device install and same-LAN reading checks pass. Windows is currently a planned route: P1 browser version, P2 WebView2/Tauri `Click.exe`, and P3 installer with shortcut and diagnostics behavior.
 
 Latest verification on 2026-06-25 repeated the hard checks and live readiness smoke without finding a new code-level blocker. This means the right stop condition is to keep the current product boundary stable instead of adding new feature scope.
 

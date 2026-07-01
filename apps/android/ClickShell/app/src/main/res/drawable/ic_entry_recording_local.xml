@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- ic_entry_recording_local: Voice Memos-style microphone/waveform cue for private builds. -->
+    <path
+        android:fillColor="#f7f2e7"
+        android:pathData="M19,8h10a5,5 0,0 1,5 5v11a10,10 0,0 1,-20 0V13a5,5 0,0 1,5 -5z" />
+    <path
+        android:strokeColor="#f7f2e7"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M10,23c0,9 5,14 14,14s14,-5 14,-14M24,37v5M18,42h12" />
+    <path
+        android:strokeColor="#d86b5d"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M6,19c2,-3 2,-7 0,-10M42,19c-2,-3 -2,-7 0,-10" />
+</vector>

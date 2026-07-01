@@ -1,0 +1,21 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.click.shell"
+    compileSdk 35
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    defaultConfig {
+        applicationId "com.click.shell"
+        minSdk 23
+        targetSdk 35
+        versionCode 3
+        versionName "0.1.2"
+        buildConfigField "String", "CLICK_DEFAULT_HOST", "\"${System.getenv("CLICK_DEFAULT_HOST") ?: ""}\""
+    }
+}

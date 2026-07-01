@@ -5,6 +5,7 @@ __pycache__/
 Probe/.build/
 Probe/ReadiumDependencyProbe/.build/
 **/.swiftpm/
+**/.gradle/
 build/
 .playwright-cli/
 reports/

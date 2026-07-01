@@ -25,9 +25,11 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from reader_api import db
+from reader_api.mobile_workspace import router as mobile_workspace_router
 
 
 app = FastAPI(title="Sentence Reader API", version="2.0.0")
+app.include_router(mobile_workspace_router)
 
 
 DEFAULT_HERMES_COGNITIVE_OS_DIR = Path(
@@ -718,7 +720,12 @@ def lan_reader_html() -> str:
   </section>
   <script>
     const initialBookID = new URLSearchParams(window.location.search).get('book_id');
-    const state = { books: [], book: null, manifest: null, chapterIndex: 0, annotations: [], focused: null, redIDs: new Map(), noteByIndex: new Map(), saveTimer: 0, noteTimer: 0, sentenceTapTimer: 0, pageIndex: 0, totalPages: 1, pageTurnLockUntil: 0, touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchSentence: null, longPressTimer: 0, longPressTriggered: false, recognition: null, mediaRecorder: null, voiceChunks: [], voiceStartedAt: 0, voiceStream: null, lookup: null };
+    const state = { books: [], book: null, manifest: null, chapterIndex: 0, annotations: [], focused: null, redIDs: new Map(), noteByIndex: new Map(), saveTimer: 0, noteTimer: 0, sentenceTapTimer: 0, pageIndex: 0, totalPages: 1, pageTurnLockUntil: 0, wheelGestureDirection: 0, wheelGestureDistance: 0, wheelGestureConsumed: false, lastWheelEventAt: 0, wheelInertiaLockUntil: 0, touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchSentence: null, longPressTimer: 0, longPressTriggered: false, recognition: null, mediaRecorder: null, voiceChunks: [], voiceStartedAt: 0, voiceStream: null, lookup: null };
+    const pageTurnCooldownMs = 360;
+    const wheelInertiaLockMs = 520;
+    const wheelGestureIdleMs = 160;
+    const wheelPageTurnThreshold = 96;
+    const wheelDominanceRatio = 1.25;
     const $ = (id) => document.getElementById(id);
     function status(text) { $('status').textContent = text; }
     function openDrawer() { document.body.classList.add('drawer-open'); }
@@ -785,7 +792,7 @@ def lan_reader_html() -> str:
       if (!state.manifest) return;
       const now = Date.now();
       if (now < state.pageTurnLockUntil) return;
-      state.pageTurnLockUntil = now + 720;
+      state.pageTurnLockUntil = now + pageTurnCooldownMs;
       const before = state.pageIndex;
       state.pageIndex = Math.max(0, Math.min(state.pageIndex + direction, state.totalPages - 1));
       if (state.pageIndex !== before) {
@@ -796,6 +803,40 @@ def lan_reader_html() -> str:
       if (nextChapter >= 0 && nextChapter < state.manifest.chapters.length) {
         await loadChapter(nextChapter, direction < 0 ? 1 : 0);
       }
+    }
+    function resetWheelGesture() {
+      state.wheelGestureDirection = 0;
+      state.wheelGestureDistance = 0;
+      state.wheelGestureConsumed = false;
+    }
+    function handleHorizontalWheel(event) {
+      const now = Date.now();
+      const absX = Math.abs(event.deltaX || 0);
+      const absY = Math.abs(event.deltaY || 0);
+      if (now - state.lastWheelEventAt > wheelGestureIdleMs) resetWheelGesture();
+      state.lastWheelEventAt = now;
+      if (now < state.wheelInertiaLockUntil || now < state.pageTurnLockUntil) {
+        state.wheelGestureConsumed = true;
+        return true;
+      }
+      if (absX < 10 || absX < absY * wheelDominanceRatio) {
+        resetWheelGesture();
+        return false;
+      }
+      const direction = event.deltaX > 0 ? 1 : -1;
+      if (state.wheelGestureDirection !== 0 && direction !== state.wheelGestureDirection) {
+        if (absX < 18) return true;
+        resetWheelGesture();
+      }
+      if (state.wheelGestureDirection === 0) state.wheelGestureDirection = direction;
+      if (state.wheelGestureConsumed) return true;
+      state.wheelGestureDistance += absX;
+      if (state.wheelGestureDistance >= wheelPageTurnThreshold) {
+        state.wheelGestureConsumed = true;
+        state.wheelInertiaLockUntil = now + wheelInertiaLockMs;
+        turnPage(state.wheelGestureDirection);
+      }
+      return true;
     }
     function sentenceParts(text) {
       const out = [];
@@ -1498,6 +1539,14 @@ def lan_reader_html() -> str:
         turnPage(deltaX < 0 ? 1 : -1);
       }
       state.touchSentence = null;
+    }, { passive: false });
+    $('readerWrap').addEventListener('wheel', (event) => {
+      if (shouldLetSystemHandle(event)) return;
+      const handled = handleHorizontalWheel(event);
+      if (handled) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     }, { passive: false });
     $('audioFile').addEventListener('change', async (event) => {
       const file = event.target.files && event.target.files[0];

@@ -55,6 +55,12 @@ The current priority is product acceptance, not feature expansion. V2.1 is accep
 
 2026-06-30 platform route decision: Click should present itself as one local reading system with multiple client entries. macOS App is the current primary usable client; iPad/browser same-LAN access is currently usable; Windows is a planned route. The shared Web reader now implements the keyboard contract that Windows will reuse (`N` note, `R` red highlight, `V` voice note, `Esc`, arrows/PageUp/PageDown). Windows should not rewrite the reader or introduce a second database. P1 is browser access with local Reader API, P2 is a WebView2 or Tauri `Click.exe` shell, and P3 is an installer with Start Menu and optional desktop shortcut behavior. The installer and shortcuts are not implemented yet. Details live in `docs/windows_client_plan.md`.
 
+2026-06-30 iPad app shell P1 decision: the mobile native path should start with an app shell, not a second reader. The local iPad shell scaffold lives under `apps/ios/ClickShell`, uses SwiftUI + WKWebView, checks `/health`, opens `/library`, and lets the existing Web reader handle `/lan/reader`. Android is intentionally README-only in this phase. This route is not accepted as a finished native iPad distribution until `xcodebuild` can build against an available iOS destination and the app is signed and installed on a real iPad.
+
+2026-06-30 Android app shell P1 decision: because iPad build acceptance is blocked by local Xcode iOS platform/runtime, Android has been advanced from README-only to a local Activity + WebView scaffold under `apps/android/ClickShell`. It uses the same product boundary as iPad: Mac remains the data/API host, Android checks `/health`, opens `/library`, and reuses `/lan/reader`. A local debug APK build is now the P1 test artifact; signed release packaging, desktop-style distribution, and real-device same-LAN verification remain next steps.
+
+2026-07-01 Mobile Workspace P1.1-P6 route: the mobile client path now treats Android/iPad as local workspace shells with `阅读` / `录音` / `Hermes` entries. New durable recordings go to the independent `~/Documents/Recordings` total store with legacy Click Knowledge Inbox read-only compatibility; mobile device access uses local approve/revoke/token files; recordings can be edited, hidden non-destructively, and reprocess dry-run checked; Hermes voice messages stay in temporary VoiceInbox; edge-tts is optional and local; Android debug APK output remains a phone-test artifact, not a signed release.
+
 V1.2 is done only when:
 
 1. PostgreSQL is available locally.

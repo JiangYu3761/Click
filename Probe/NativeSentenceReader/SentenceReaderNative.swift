@@ -5606,7 +5606,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       let lastWheelEventAt = 0;
       let wheelInertiaLockUntil = 0;
       let pageTurnLockUntil = 0;
-      const pageTurnCooldownMs = 860;
+      let wheelGestureConsumed = false;
+      const pageTurnCooldownMs = 360;
+      const wheelInertiaLockMs = 520;
+      const wheelGestureIdleMs = 160;
+      const wheelPageTurnThreshold = 96;
+      const wheelDominanceRatio = 1.25;
       function pageSurface() {
         return document.getElementById('sr-page-surface') || ensureSurface();
       }
@@ -5779,27 +5784,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       function resetWheelGesture() {
         wheelGestureDirection = 0;
         wheelGestureDistance = 0;
+        wheelGestureConsumed = false;
       }
       function handleHorizontalWheel(event) {
         const now = Date.now();
         const absX = Math.abs(event.deltaX);
         const absY = Math.abs(event.deltaY);
 
-        if (now < wheelInertiaLockUntil || now < pageTurnLockUntil) {
-          return false;
-        }
-        if (absX < Math.max(12, absY * 0.85)) {
-          resetWheelGesture();
-          return false;
-        }
-        if (now - lastWheelEventAt > 180) {
+        if (now - lastWheelEventAt > wheelGestureIdleMs) {
           resetWheelGesture();
         }
-
         lastWheelEventAt = now;
+        if (now < wheelInertiaLockUntil || now < pageTurnLockUntil) {
+          wheelGestureConsumed = true;
+          return false;
+        }
+        if (absX < 10 || absX < absY * wheelDominanceRatio) {
+          resetWheelGesture();
+          return false;
+        }
         const eventDirection = event.deltaX > 0 ? 1 : -1;
         if (wheelGestureDirection !== 0 && eventDirection !== wheelGestureDirection) {
-          if (absX < 22) {
+          if (absX < 18) {
             return false;
           }
           resetWheelGesture();
@@ -5807,12 +5813,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if (wheelGestureDirection === 0) {
           wheelGestureDirection = eventDirection;
         }
+        if (wheelGestureConsumed) {
+          return false;
+        }
 
         wheelGestureDistance += absX;
-        if (wheelGestureDistance >= 144) {
+        if (wheelGestureDistance >= wheelPageTurnThreshold) {
           const turnDirection = wheelGestureDirection;
-          resetWheelGesture();
-          wheelInertiaLockUntil = now + pageTurnCooldownMs;
+          wheelGestureConsumed = true;
+          wheelInertiaLockUntil = now + wheelInertiaLockMs;
           turnPage(turnDirection);
         }
         return false;
@@ -5984,6 +5993,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
       }, true);
       document.addEventListener('wheel', function (event) {
+        if (shouldLetSystemHandle(event)) { return; }
         event.preventDefault();
         event.stopPropagation();
         return handleHorizontalWheel(event);
