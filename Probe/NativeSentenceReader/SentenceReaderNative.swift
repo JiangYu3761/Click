@@ -5368,10 +5368,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
               rgba(255,255,255,0) 100%) !important;
         }
         #sr-page-flip-overlay.sr-active.sr-next {
-          animation: sr-page-curl-next 520ms cubic-bezier(.18,.86,.20,1) both !important;
+          animation: sr-page-curl-next 280ms cubic-bezier(.18,.86,.20,1) both !important;
         }
         #sr-page-flip-overlay.sr-active.sr-previous {
-          animation: sr-page-curl-previous 520ms cubic-bezier(.18,.86,.20,1) both !important;
+          animation: sr-page-curl-previous 280ms cubic-bezier(.18,.86,.20,1) both !important;
         }
         @keyframes sr-page-curl-next {
           0% { opacity: 0; transform: translateX(96%) skewX(-9deg); }
@@ -5606,10 +5606,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       let lastWheelEventAt = 0;
       let wheelInertiaLockUntil = 0;
       let pageTurnLockUntil = 0;
+      let pendingPageTurnDirection = 0;
+      let pendingPageTurnTimer = 0;
       let wheelGestureConsumed = false;
-      const pageTurnCooldownMs = 360;
-      const wheelInertiaLockMs = 520;
-      const wheelGestureIdleMs = 160;
+      const pageTurnCooldownMs = 180;
+      const wheelInertiaLockMs = 210;
+      const wheelGestureIdleMs = 120;
       const wheelPageTurnThreshold = 96;
       const wheelDominanceRatio = 1.25;
       function pageSurface() {
@@ -5743,7 +5745,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         overlay.classList.add('sr-active');
         window.setTimeout(function () {
           overlay.className = '';
-        }, 560);
+        }, 320);
       }
       function applyPage(animated, direction) {
         const surface = pageSurface();
@@ -5751,11 +5753,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         if (animated) {
           playPageCurl(direction || 1);
           surface.style.transformOrigin = direction < 0 ? 'left center' : 'right center';
-          surface.style.transition = 'transform 520ms cubic-bezier(.18,.86,.20,1), filter 520ms cubic-bezier(.18,.86,.20,1)';
+          surface.style.transition = 'transform 280ms cubic-bezier(.18,.86,.20,1), filter 280ms cubic-bezier(.18,.86,.20,1)';
           surface.style.filter = 'drop-shadow(' + (direction < 0 ? '18px' : '-18px') + ' 0 22px rgba(0,0,0,.32))';
           window.setTimeout(function () {
             surface.style.filter = 'none';
-          }, 540);
+          }, 300);
         } else {
           surface.style.transition = 'none';
           surface.style.filter = 'none';
@@ -5765,10 +5767,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         window.scrollTo(0, 0);
         publishPage();
       }
-      function turnPage(direction) {
+      function schedulePendingPageTurn(direction) {
+        pendingPageTurnDirection = direction < 0 ? -1 : 1;
+        if (pendingPageTurnTimer) { return; }
+        const delay = Math.max(0, pageTurnLockUntil - Date.now()) + 8;
+        pendingPageTurnTimer = window.setTimeout(function () {
+          pendingPageTurnTimer = 0;
+          const queuedDirection = pendingPageTurnDirection;
+          pendingPageTurnDirection = 0;
+          if (queuedDirection) {
+            turnPage(queuedDirection, { fromPending: true });
+          }
+        }, delay);
+      }
+      function turnPage(direction, options) {
+        options = options || {};
         const now = Date.now();
         if (now < pageTurnLockUntil) {
+          schedulePendingPageTurn(direction);
           return false;
+        }
+        if (options.fromPending) {
+          pendingPageTurnDirection = 0;
         }
         pageTurnLockUntil = now + pageTurnCooldownMs;
         const before = pageIndex;
@@ -5791,16 +5811,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         const absX = Math.abs(event.deltaX);
         const absY = Math.abs(event.deltaY);
 
-        if (now - lastWheelEventAt > wheelGestureIdleMs) {
+        const startsNewGesture = now - lastWheelEventAt > wheelGestureIdleMs;
+        if (startsNewGesture) {
           resetWheelGesture();
         }
         lastWheelEventAt = now;
-        if (now < wheelInertiaLockUntil || now < pageTurnLockUntil) {
-          wheelGestureConsumed = true;
-          return false;
-        }
         if (absX < 10 || absX < absY * wheelDominanceRatio) {
           resetWheelGesture();
+          return false;
+        }
+        if (now < wheelInertiaLockUntil && !startsNewGesture) {
+          wheelGestureConsumed = true;
           return false;
         }
         const eventDirection = event.deltaX > 0 ? 1 : -1;

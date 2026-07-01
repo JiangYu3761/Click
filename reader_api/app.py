@@ -720,10 +720,10 @@ def lan_reader_html() -> str:
   </section>
   <script>
     const initialBookID = new URLSearchParams(window.location.search).get('book_id');
-    const state = { books: [], book: null, manifest: null, chapterIndex: 0, annotations: [], focused: null, redIDs: new Map(), noteByIndex: new Map(), saveTimer: 0, noteTimer: 0, sentenceTapTimer: 0, pageIndex: 0, totalPages: 1, pageTurnLockUntil: 0, wheelGestureDirection: 0, wheelGestureDistance: 0, wheelGestureConsumed: false, lastWheelEventAt: 0, wheelInertiaLockUntil: 0, touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchSentence: null, longPressTimer: 0, longPressTriggered: false, recognition: null, mediaRecorder: null, voiceChunks: [], voiceStartedAt: 0, voiceStream: null, lookup: null };
-    const pageTurnCooldownMs = 360;
-    const wheelInertiaLockMs = 520;
-    const wheelGestureIdleMs = 160;
+    const state = { books: [], book: null, manifest: null, chapterIndex: 0, annotations: [], focused: null, redIDs: new Map(), noteByIndex: new Map(), saveTimer: 0, noteTimer: 0, sentenceTapTimer: 0, pageIndex: 0, totalPages: 1, pageTurnLockUntil: 0, pendingPageTurnDirection: 0, pendingPageTurnTimer: 0, wheelGestureDirection: 0, wheelGestureDistance: 0, wheelGestureConsumed: false, lastWheelEventAt: 0, wheelInertiaLockUntil: 0, touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchSentence: null, longPressTimer: 0, longPressTriggered: false, recognition: null, mediaRecorder: null, voiceChunks: [], voiceStartedAt: 0, voiceStream: null, lookup: null };
+    const pageTurnCooldownMs = 180;
+    const wheelInertiaLockMs = 210;
+    const wheelGestureIdleMs = 120;
     const wheelPageTurnThreshold = 96;
     const wheelDominanceRatio = 1.25;
     const $ = (id) => document.getElementById(id);
@@ -788,21 +788,38 @@ def lan_reader_html() -> str:
       }
       applyPage(false);
     }
-    async function turnPage(direction) {
-      if (!state.manifest) return;
+    function schedulePendingPageTurn(direction) {
+      state.pendingPageTurnDirection = direction < 0 ? -1 : 1;
+      if (state.pendingPageTurnTimer) return;
+      const delay = Math.max(0, state.pageTurnLockUntil - Date.now()) + 8;
+      state.pendingPageTurnTimer = window.setTimeout(() => {
+        state.pendingPageTurnTimer = 0;
+        const queuedDirection = state.pendingPageTurnDirection;
+        state.pendingPageTurnDirection = 0;
+        if (queuedDirection) void turnPage(queuedDirection, { fromPending: true });
+      }, delay);
+    }
+    async function turnPage(direction, options = {}) {
+      if (!state.manifest) return false;
       const now = Date.now();
-      if (now < state.pageTurnLockUntil) return;
+      if (now < state.pageTurnLockUntil) {
+        schedulePendingPageTurn(direction);
+        return false;
+      }
+      if (options.fromPending) state.pendingPageTurnDirection = 0;
       state.pageTurnLockUntil = now + pageTurnCooldownMs;
       const before = state.pageIndex;
       state.pageIndex = Math.max(0, Math.min(state.pageIndex + direction, state.totalPages - 1));
       if (state.pageIndex !== before) {
         applyPage(true);
-        return;
+        return true;
       }
       const nextChapter = state.chapterIndex + direction;
       if (nextChapter >= 0 && nextChapter < state.manifest.chapters.length) {
         await loadChapter(nextChapter, direction < 0 ? 1 : 0);
+        return true;
       }
+      return false;
     }
     function resetWheelGesture() {
       state.wheelGestureDirection = 0;
@@ -813,15 +830,16 @@ def lan_reader_html() -> str:
       const now = Date.now();
       const absX = Math.abs(event.deltaX || 0);
       const absY = Math.abs(event.deltaY || 0);
-      if (now - state.lastWheelEventAt > wheelGestureIdleMs) resetWheelGesture();
+      const startsNewGesture = now - state.lastWheelEventAt > wheelGestureIdleMs;
+      if (startsNewGesture) resetWheelGesture();
       state.lastWheelEventAt = now;
-      if (now < state.wheelInertiaLockUntil || now < state.pageTurnLockUntil) {
-        state.wheelGestureConsumed = true;
-        return true;
-      }
       if (absX < 10 || absX < absY * wheelDominanceRatio) {
         resetWheelGesture();
         return false;
+      }
+      if (now < state.wheelInertiaLockUntil && !startsNewGesture) {
+        state.wheelGestureConsumed = true;
+        return true;
       }
       const direction = event.deltaX > 0 ? 1 : -1;
       if (state.wheelGestureDirection !== 0 && direction !== state.wheelGestureDirection) {
@@ -832,9 +850,10 @@ def lan_reader_html() -> str:
       if (state.wheelGestureConsumed) return true;
       state.wheelGestureDistance += absX;
       if (state.wheelGestureDistance >= wheelPageTurnThreshold) {
+        const turnDirection = state.wheelGestureDirection;
         state.wheelGestureConsumed = true;
         state.wheelInertiaLockUntil = now + wheelInertiaLockMs;
-        turnPage(state.wheelGestureDirection);
+        void turnPage(turnDirection);
       }
       return true;
     }
