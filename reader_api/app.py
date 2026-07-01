@@ -302,6 +302,13 @@ def xml_text(node: Optional[ET.Element]) -> str:
     return "".join(node.itertext()).strip()
 
 
+def xml_attr(node: ET.Element, name: str) -> str:
+    for key, value in node.attrib.items():
+        if local_name(key) == name:
+            return value
+    return ""
+
+
 def zip_text(epub: zipfile.ZipFile, name: str) -> str:
     raw = epub.read(name)
     for encoding in ("utf-8", "utf-16", "gb18030"):
@@ -355,6 +362,137 @@ def chapter_title_from_html(html_text: str, fallback: str) -> str:
     return fallback
 
 
+def clean_toc_title(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()[:140]
+
+
+def chapter_index_for_toc_href(href: str, chapters: list[dict[str, Any]]) -> Optional[int]:
+    target = safe_epub_member((href or "").split("#", 1)[0])
+    for chapter in chapters:
+        if chapter.get("href") == target or chapter.get("locator") == target:
+            return int(chapter["index"])
+    return None
+
+
+def append_epub3_toc_items(
+    node: ET.Element,
+    *,
+    base_path: str,
+    chapters: list[dict[str, Any]],
+    level: int,
+    into: list[dict[str, Any]],
+) -> None:
+    for li in [child for child in list(node) if local_name(child.tag) == "li"]:
+        title = ""
+        href = ""
+        nested_lists: list[ET.Element] = []
+        for child in list(li):
+            child_name = local_name(child.tag)
+            if child_name in {"a", "span"} and not title:
+                title = clean_toc_title(xml_text(child))
+                href = xml_attr(child, "href") if child_name == "a" else ""
+            elif child_name in {"ol", "ul"}:
+                nested_lists.append(child)
+        if title and href:
+            try:
+                chapter_index = chapter_index_for_toc_href(resolve_epub_path(base_path, href), chapters)
+            except HTTPException:
+                chapter_index = None
+            if chapter_index is not None:
+                into.append(
+                    {
+                        "title": title,
+                        "chapter_index": chapter_index,
+                        "level": max(0, level),
+                    }
+                )
+        for nested in nested_lists:
+            append_epub3_toc_items(nested, base_path=base_path, chapters=chapters, level=level + 1, into=into)
+
+
+def epub3_toc_entries(epub: zipfile.ZipFile, manifest: dict[str, dict[str, str]], chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    nav_items = [
+        item
+        for item in manifest.values()
+        if "nav" in {part.strip().lower() for part in (item.get("properties") or "").split()}
+    ]
+    for item in nav_items:
+        href = item.get("href") or ""
+        try:
+            root = ET.fromstring(zip_text(epub, href))
+        except Exception:
+            continue
+        navs = [node for node in root.iter() if local_name(node.tag) == "nav"]
+        toc_nav = next(
+            (
+                node
+                for node in navs
+                if "toc" in (xml_attr(node, "type") or "").split()
+                or xml_attr(node, "role").lower() == "doc-toc"
+            ),
+            navs[0] if navs else None,
+        )
+        if toc_nav is None:
+            continue
+        top_list = next((child for child in list(toc_nav) if local_name(child.tag) in {"ol", "ul"}), None)
+        if top_list is None:
+            continue
+        entries: list[dict[str, Any]] = []
+        append_epub3_toc_items(top_list, base_path=href, chapters=chapters, level=0, into=entries)
+        if entries:
+            return entries
+    return []
+
+
+def append_ncx_toc_items(
+    nav_point: ET.Element,
+    *,
+    base_path: str,
+    chapters: list[dict[str, Any]],
+    level: int,
+    into: list[dict[str, Any]],
+) -> None:
+    label = clean_toc_title(xml_text(xml_first(nav_point, "text")))
+    content = xml_first(nav_point, "content")
+    href = xml_attr(content, "src") if content is not None else ""
+    if label and href:
+        try:
+            chapter_index = chapter_index_for_toc_href(resolve_epub_path(base_path, href), chapters)
+        except HTTPException:
+            chapter_index = None
+        if chapter_index is not None:
+            into.append({"title": label, "chapter_index": chapter_index, "level": max(0, level)})
+    for child in xml_children(nav_point, "navPoint"):
+        append_ncx_toc_items(child, base_path=base_path, chapters=chapters, level=level + 1, into=into)
+
+
+def ncx_toc_entries(epub: zipfile.ZipFile, manifest: dict[str, dict[str, str]], chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ncx_items = [
+        item
+        for item in manifest.values()
+        if item.get("media_type") == "application/x-dtbncx+xml" or (item.get("href") or "").lower().endswith(".ncx")
+    ]
+    for item in ncx_items:
+        href = item.get("href") or ""
+        try:
+            root = ET.fromstring(zip_text(epub, href))
+        except Exception:
+            continue
+        nav_map = xml_first(root, "navMap")
+        if nav_map is None:
+            continue
+        entries: list[dict[str, Any]] = []
+        for nav_point in xml_children(nav_map, "navPoint"):
+            append_ncx_toc_items(nav_point, base_path=href, chapters=chapters, level=0, into=entries)
+        if entries:
+            return entries
+    return []
+
+
+def toc_entries(epub: zipfile.ZipFile, manifest: dict[str, dict[str, str]], chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return epub3_toc_entries(epub, manifest, chapters) or ncx_toc_entries(epub, manifest, chapters)
+
+
 def epub_publication(epub_path: Path, *, book: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     if not epub_path.exists():
         raise HTTPException(status_code=404, detail=f"EPUB file missing: {epub_path}")
@@ -401,6 +539,7 @@ def epub_publication(epub_path: Path, *, book: Optional[dict[str, Any]] = None) 
                         "title": chapter_title_from_html(chapter_html, f"第 {len(chapters) + 1} 章"),
                     }
                 )
+            toc = toc_entries(epub, manifest, chapters)
             return {
                 "schema": "sentence_reader.epub_publication.v1",
                 "title": title,
@@ -408,6 +547,7 @@ def epub_publication(epub_path: Path, *, book: Optional[dict[str, Any]] = None) 
                 "opf_path": opf_path,
                 "chapter_count": len(chapters),
                 "chapters": chapters,
+                "toc": toc,
             }
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=422, detail="invalid EPUB zip file") from exc
@@ -649,6 +789,9 @@ def lan_reader_html() -> str:
     #books, #chapters { padding:8px; overflow:auto; }
     #books { flex:0 0 auto; max-height:30vh; border-bottom:1px solid var(--line); }
     #chapters { flex:1 1 auto; }
+    #chapters .toc-row { white-space:normal; line-height:1.35; padding-left:var(--toc-indent, 8px); }
+    #chapters .toc-row[data-level="0"] { font-weight:650; }
+    #chapters .toc-row[data-level]:not([data-level="0"]) { color:#ddd; }
     #sentenceBar { position:fixed; z-index:32; left:max(16px, env(safe-area-inset-left)); right:max(16px, env(safe-area-inset-right)); bottom:max(8px, env(safe-area-inset-bottom)); display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; padding:6px; border:1px solid rgba(255,255,255,.13); border-radius:999px; background:rgba(15,15,15,.90); backdrop-filter:blur(18px); box-shadow:0 14px 38px rgba(0,0,0,.42); opacity:0; transform:translate3d(0,14px,0); pointer-events:none; transition:opacity 160ms ease, transform 160ms ease; }
     #sentenceBar.show { opacity:1; transform:translate3d(0,0,0); pointer-events:auto; }
     #sentenceBar button { min-height:34px; border-radius:999px; font-size:13px; padding:4px 6px; }
@@ -1190,7 +1333,15 @@ def lan_reader_html() -> str:
       await loadChapter(savedIndex >= 0 ? savedIndex : 0, saved ? Number(saved.page_ratio || 0) : 0);
     }
     function renderChapters() {
-      $('chapters').innerHTML = state.manifest.chapters.map((chapter) => `<button class="row" data-chapter="${chapter.index}">${chapter.index + 1}. ${chapter.title || chapter.locator}</button>`).join('');
+      const tocItems = Array.isArray(state.manifest.toc) && state.manifest.toc.length
+        ? state.manifest.toc
+        : state.manifest.chapters.map((chapter) => ({ title: chapter.title || chapter.locator, chapter_index: chapter.index, level: 0 }));
+      $('chapters').innerHTML = tocItems.map((entry) => {
+        const level = Math.max(0, Math.min(6, Number(entry.level || 0)));
+        const chapterIndex = Number(entry.chapter_index);
+        const title = entry.title || (state.manifest.chapters[chapterIndex] || {}).title || (state.manifest.chapters[chapterIndex] || {}).locator || '';
+        return `<button class="row toc-row" data-level="${level}" style="--toc-indent:${8 + level * 18}px" data-chapter="${chapterIndex}">${esc(title)}</button>`;
+      }).join('');
       $('chapters').querySelectorAll('button').forEach((button) => button.onclick = () => {
         closeDrawer();
         loadChapter(Number(button.dataset.chapter), 0);
@@ -5782,6 +5933,7 @@ def lan_book_manifest(book_id: str) -> dict[str, Any]:
         "book": jsonable(book),
         "publication": publication,
         "chapters": publication["chapters"],
+        "toc": publication.get("toc", []),
         "position": jsonable(dict(position)) if position else None,
         "reader": {
             "page_url": "/lan/reader",

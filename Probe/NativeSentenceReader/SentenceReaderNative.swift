@@ -4524,10 +4524,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         menu.autoenablesItems = false
 
         for entry in entries {
-            let item = NSMenuItem(title: entry.title, action: #selector(selectChapterFromContents(_:)), keyEquivalent: "")
+            let visibleLevel = min(max(entry.level, 0), 6)
+            let visibleTitle = String(repeating: "    ", count: visibleLevel) + entry.title
+            let item = NSMenuItem(title: visibleTitle, action: #selector(selectChapterFromContents(_:)), keyEquivalent: "")
             item.target = self
             item.tag = entry.chapterIndex
-            item.indentationLevel = min(entry.level, 2)
+            item.indentationLevel = visibleLevel
+            item.toolTip = entry.title
             item.state = entry.chapterIndex == currentChapterIndex ? .on : .off
             item.isEnabled = true
             menu.addItem(item)

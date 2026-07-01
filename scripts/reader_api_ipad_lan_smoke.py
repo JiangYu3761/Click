@@ -142,6 +142,7 @@ def write_epub(path: Path) -> None:
   <manifest>
     <item id="chapter1" href="Text/chapter1.xhtml" media-type="application/xhtml+xml"/>
     <item id="chapter2" href="Text/chapter2.xhtml" media-type="application/xhtml+xml"/>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     <item id="pixel" href="Images/pixel.svg" media-type="image/svg+xml"/>
   </manifest>
   <spine>
@@ -149,6 +150,24 @@ def write_epub(path: Path) -> None:
     <itemref idref="chapter2"/>
   </spine>
 </package>
+""",
+        )
+        zf.writestr(
+            "OEBPS/nav.xhtml",
+            """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <body>
+    <nav epub:type="toc">
+      <ol>
+        <li><a href="Text/chapter1.xhtml">第一部分</a>
+          <ol>
+            <li><a href="Text/chapter2.xhtml">第二章 子层</a></li>
+          </ol>
+        </li>
+      </ol>
+    </nav>
+  </body>
+</html>
 """,
         )
         zf.writestr(
@@ -218,6 +237,9 @@ def main() -> int:
                 "goLibraryHome",
                 "longPressTimer",
                 "100dvh",
+                "toc-row",
+                "--toc-indent",
+                "data-level",
             ]:
                 assert marker in page.text, marker
 
@@ -231,6 +253,12 @@ def main() -> int:
             manifest_json = manifest.json()
             assert manifest_json["schema"] == "sentence_reader.lan_manifest.v1"
             assert len(manifest_json["chapters"]) == 2
+            assert manifest_json["toc"][0]["title"] == "第一部分"
+            assert manifest_json["toc"][0]["level"] == 0
+            assert manifest_json["toc"][0]["chapter_index"] == 0
+            assert manifest_json["toc"][1]["title"] == "第二章 子层"
+            assert manifest_json["toc"][1]["level"] == 1
+            assert manifest_json["toc"][1]["chapter_index"] == 1
 
             chapter = client.get("/lan/books/book_lan_smoke/chapters/0")
             assert chapter.status_code == 200

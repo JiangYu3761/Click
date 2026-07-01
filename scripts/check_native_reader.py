@@ -11,6 +11,8 @@ REQUIRED_MARKERS = {
     "top contents button": "NSButton(title: \"目录\"",
     "visible TOC count": "contentsButton.title = tocEntries.isEmpty ?",
     "native contents menu": "NSMenu(title: \"目录\")",
+    "visible TOC title indentation": "visibleTitle",
+    "visible TOC indentation level": "item.indentationLevel = visibleLevel",
     "NCX table of contents": "collectTOCEntries",
     "TOC navMap parsing": "localName: \"navMap\"",
     "TOC fallback": "fallbackTOCEntries",
