@@ -721,9 +721,11 @@ def lan_reader_html() -> str:
   <script>
     const initialBookID = new URLSearchParams(window.location.search).get('book_id');
     const state = { books: [], book: null, manifest: null, chapterIndex: 0, annotations: [], focused: null, redIDs: new Map(), noteByIndex: new Map(), saveTimer: 0, noteTimer: 0, sentenceTapTimer: 0, pageIndex: 0, totalPages: 1, pageTurnLockUntil: 0, pendingPageTurnDirection: 0, pendingPageTurnTimer: 0, wheelGestureDirection: 0, wheelGestureDistance: 0, wheelGestureConsumed: false, lastWheelEventAt: 0, wheelInertiaLockUntil: 0, touchStartX: 0, touchStartY: 0, touchStartTime: 0, touchSentence: null, longPressTimer: 0, longPressTriggered: false, recognition: null, mediaRecorder: null, voiceChunks: [], voiceStartedAt: 0, voiceStream: null, lookup: null };
-    const pageTurnCooldownMs = 180;
-    const wheelInertiaLockMs = 210;
-    const wheelGestureIdleMs = 120;
+    // Keep the physical wheel gesture boundary separate from page animation:
+    // one swipe triggers one page, while the next clear swipe may arrive before the animation ends.
+    const pageTurnCooldownMs = 120;
+    const wheelInertiaLockMs = 180;
+    const wheelGestureIdleMs = 220;
     const wheelPageTurnThreshold = 96;
     const wheelDominanceRatio = 1.25;
     const $ = (id) => document.getElementById(id);

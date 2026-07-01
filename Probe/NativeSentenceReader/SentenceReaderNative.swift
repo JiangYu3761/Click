@@ -5609,9 +5609,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       let pendingPageTurnDirection = 0;
       let pendingPageTurnTimer = 0;
       let wheelGestureConsumed = false;
-      const pageTurnCooldownMs = 180;
-      const wheelInertiaLockMs = 210;
-      const wheelGestureIdleMs = 120;
+      // Keep the physical wheel gesture boundary separate from page animation:
+      // one swipe triggers one page, while the next clear swipe may arrive before the animation ends.
+      const pageTurnCooldownMs = 120;
+      const wheelInertiaLockMs = 180;
+      const wheelGestureIdleMs = 220;
       const wheelPageTurnThreshold = 96;
       const wheelDominanceRatio = 1.25;
       function pageSurface() {
