@@ -16,6 +16,7 @@ PLIST = {
     "SUFeedURL": REPO + "/releases/latest/download/appcast.xml",
     "SUPublicEDKey": "q6rV6664X4YBcTIiRNutYx1mBqfwFH/MoghJyPMZrJw=",
     "SURequireSignedFeed": True,
+    "SUVerifyUpdateBeforeExtraction": True,
     "SUEnableAutomaticChecks": True,
     "SUAutomaticallyUpdate": True,
     "SUScheduledCheckInterval": 14400,
