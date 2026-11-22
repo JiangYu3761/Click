@@ -40,10 +40,13 @@
         [self.updater checkForUpdatesInBackground];
     }
 }
+- (BOOL)isAutomaticUpdateEnabled {
+    return self.updater.automaticallyChecksForUpdates && self.updater.automaticallyDownloadsUpdates;
+}
 - (NSView *)makeLibraryControls {
     NSButton *automatic = [NSButton checkboxWithTitle:@"自动更新" target:self action:@selector(toggleAutomatic:)];
     automatic.controlSize = NSControlSizeSmall;
-    automatic.state = self.updater.automaticallyChecksForUpdates ? NSControlStateValueOn : NSControlStateValueOff;
+    automatic.state = self.isAutomaticUpdateEnabled ? NSControlStateValueOn : NSControlStateValueOff;
     automatic.toolTip = @"自动检查、下载并安装新版本，完成后重新打开 Click";
     self.automaticButton = automatic;
     NSButton *check = [NSButton buttonWithTitle:@"手动更新" target:self action:@selector(checkNow:)];
@@ -59,7 +62,7 @@
     [menu addItemWithTitle:@"检查更新…" action:@selector(checkNow:) keyEquivalent:@""].target = self;
     NSMenuItem *automatic = [menu addItemWithTitle:@"自动更新" action:@selector(toggleAutomatic:) keyEquivalent:@""];
     automatic.target = self;
-    automatic.state = self.updater.automaticallyChecksForUpdates ? NSControlStateValueOn : NSControlStateValueOff;
+    automatic.state = self.isAutomaticUpdateEnabled ? NSControlStateValueOn : NSControlStateValueOff;
     automatic.toolTip = @"定期检查新版本，下载完成后自动安装并重新打开 Click";
 }
 - (void)checkNow:(id)sender {
@@ -70,17 +73,19 @@
     }
 }
 - (void)toggleAutomatic:(id)sender {
-    BOOL enabled = !self.updater.automaticallyChecksForUpdates;
-    self.updater.automaticallyDownloadsUpdates = enabled;
+    BOOL enabled = !self.isAutomaticUpdateEnabled;
+    // Sparkle accepts a download opt-in only after automatic checks are enabled.
+    if (!enabled) self.updater.automaticallyDownloadsUpdates = NO;
     self.updater.automaticallyChecksForUpdates = enabled;
-    NSControlStateValue state = enabled ? NSControlStateValueOn : NSControlStateValueOff;
+    if (enabled) self.updater.automaticallyDownloadsUpdates = YES;
+    NSControlStateValue state = self.isAutomaticUpdateEnabled ? NSControlStateValueOn : NSControlStateValueOff;
     [sender setState:state];
     self.automaticButton.state = state;
     if (enabled && self.updater.canCheckForUpdates) [self.updater checkForUpdatesInBackground];
 }
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     if (item.action == @selector(toggleAutomatic:)) {
-        item.state = self.updater.automaticallyChecksForUpdates ? NSControlStateValueOn : NSControlStateValueOff;
+        item.state = self.isAutomaticUpdateEnabled ? NSControlStateValueOn : NSControlStateValueOff;
         return self.startupError == nil;
     }
     return self.startupError != nil || self.updater.canCheckForUpdates;
