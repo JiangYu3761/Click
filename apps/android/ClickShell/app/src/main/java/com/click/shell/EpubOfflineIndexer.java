@@ -11,7 +11,6 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,7 +30,9 @@ import org.xml.sax.SAXException;
 /**
  * Builds the durable, offline-searchable chapter rows for a locally imported EPUB.
  */
-final class EpubOfflineIndexer {
+public final class EpubOfflineIndexer {
+    private static final Charset UTF8 = Charset.forName("UTF-8");
+    private static final Charset LATIN1 = Charset.forName("ISO-8859-1");
     private static final int MAX_PACKAGE_BYTES = 2 * 1024 * 1024;
     private static final long MAX_INDEXED_BYTES = 120L * 1024L * 1024L;
     private static final Pattern XML_ENCODING = Pattern.compile(
@@ -49,49 +50,9 @@ final class EpubOfflineIndexer {
             throw new IllegalArgumentException("EPUB source is missing");
         }
         try (ZipFile archive = new ZipFile(epub)) {
-            String container = readUtf8(
-                    archive,
-                    requireEntry(archive, "META-INF/container.xml"),
-                    MAX_PACKAGE_BYTES
-            );
-            Document containerXml = parseXml(container.getBytes(StandardCharsets.UTF_8));
-            Element rootfile = firstElement(containerXml, "rootfile");
-            String packagePath = safeEntryPath(rootfile.getAttribute("full-path"));
-            if (packagePath.isEmpty()) {
-                throw new IllegalArgumentException("EPUB container has no package path");
-            }
-
-            byte[] packageBytes = readBytes(
-                    archive,
-                    requireEntry(archive, packagePath),
-                    MAX_PACKAGE_BYTES
-            );
-            Document packageXml = parseXml(packageBytes);
-            String packageDirectory = parentPath(packagePath);
-            Map<String, String> manifest = new HashMap<>();
-            NodeList items = elements(packageXml, "item");
-            for (int index = 0; index < items.getLength(); index++) {
-                Element item = (Element) items.item(index);
-                String id = clean(item.getAttribute("id"));
-                String href = clean(item.getAttribute("href"));
-                String mediaType = clean(item.getAttribute("media-type")).toLowerCase(Locale.ROOT);
-                if (!id.isEmpty()
-                        && !href.isEmpty()
-                        && ("application/xhtml+xml".equals(mediaType)
-                        || "text/html".equals(mediaType))) {
-                    manifest.put(id, resolveEntryPath(packageDirectory, href));
-                }
-            }
-
             List<Chapter> chapters = new ArrayList<>();
             long indexedBytes = 0L;
-            NodeList itemrefs = elements(packageXml, "itemref");
-            for (int index = 0; index < itemrefs.getLength(); index++) {
-                Element itemref = (Element) itemrefs.item(index);
-                String entryPath = manifest.get(clean(itemref.getAttribute("idref")));
-                if (entryPath == null) {
-                    continue;
-                }
+            for (String entryPath : spine(archive)) {
                 ZipEntry entry = requireEntry(archive, entryPath);
                 long remaining = MAX_INDEXED_BYTES - indexedBytes;
                 if (remaining <= 0L) {
@@ -107,15 +68,60 @@ final class EpubOfflineIndexer {
                         html
                 ));
             }
-            if (chapters.isEmpty()) {
-                throw new IllegalArgumentException("EPUB spine has no readable text chapters");
-            }
             return chapters;
         }
     }
 
+    public static List<String> spine(ZipFile archive) throws Exception {
+        String container = readUtf8(
+                archive,
+                requireEntry(archive, "META-INF/container.xml"),
+                MAX_PACKAGE_BYTES
+        );
+        Document containerXml = parseXml(container.getBytes(UTF8));
+        Element rootfile = firstElement(containerXml, "rootfile");
+        String packagePath = safeEntryPath(rootfile.getAttribute("full-path"));
+        if (packagePath.isEmpty()) {
+            throw new IllegalArgumentException("EPUB container has no package path");
+        }
+
+        byte[] packageBytes = readBytes(
+                archive,
+                requireEntry(archive, packagePath),
+                MAX_PACKAGE_BYTES
+        );
+        Document packageXml = parseXml(packageBytes);
+        String packageDirectory = parentPath(packagePath);
+        Map<String, String> manifest = new HashMap<>();
+        NodeList items = elements(packageXml, "item");
+        for (int index = 0; index < items.getLength(); index++) {
+            Element item = (Element) items.item(index);
+            String id = clean(item.getAttribute("id"));
+            String href = clean(item.getAttribute("href"));
+            String mediaType = clean(item.getAttribute("media-type")).toLowerCase(Locale.ROOT);
+            if (!id.isEmpty()
+                    && !href.isEmpty()
+                    && ("application/xhtml+xml".equals(mediaType)
+                    || "text/html".equals(mediaType))) {
+                manifest.put(id, resolveEntryPath(packageDirectory, href));
+            }
+        }
+        List<String> paths = new ArrayList<>();
+        NodeList refs = elements(packageXml, "itemref");
+        for (int i = 0; i < refs.getLength(); i++) {
+            String path = manifest.get(clean(((Element) refs.item(i)).getAttribute("idref")));
+            if (path != null) paths.add(path);
+        }
+        if (paths.isEmpty()) throw new IllegalArgumentException("EPUB spine has no readable text chapters");
+        return paths;
+    }
+
+    public static String chapterMarkup(ZipFile archive, String path) throws Exception {
+        return decodeMarkup(readBytes(archive, requireEntry(archive, path), MAX_PACKAGE_BYTES * 2L));
+    }
+
     private static Document parseXml(byte[] bytes) throws Exception {
-        String declarationScan = new String(bytes, StandardCharsets.ISO_8859_1)
+        String declarationScan = new String(bytes, LATIN1)
                 .toUpperCase(Locale.ROOT);
         if (declarationScan.contains("<!DOCTYPE")
                 || declarationScan.contains("<!ENTITY")) {
@@ -187,7 +193,7 @@ final class EpubOfflineIndexer {
 
     private static String readUtf8(ZipFile archive, ZipEntry entry, int limit)
             throws Exception {
-        return new String(readBytes(archive, entry, limit), StandardCharsets.UTF_8);
+        return new String(readBytes(archive, entry, limit), UTF8);
     }
 
     private static ZipEntry requireEntry(ZipFile archive, String path) {
@@ -199,7 +205,7 @@ final class EpubOfflineIndexer {
         return entry;
     }
 
-    private static String resolveEntryPath(String base, String rawHref) throws Exception {
+    public static String resolveEntryPath(String base, String rawHref) throws Exception {
         String encodedPath = rawHref.split("#", 2)[0].replace("+", "%2B");
         String decoded = URLDecoder.decode(encodedPath, "UTF-8");
         return safeEntryPath(base.isEmpty() ? decoded : base + "/" + decoded);
@@ -224,7 +230,12 @@ final class EpubOfflineIndexer {
                 segments.add(segment);
             }
         }
-        return String.join("/", segments);
+        StringBuilder joined = new StringBuilder();
+        for (String segment : segments) {
+            if (joined.length() > 0) joined.append('/');
+            joined.append(segment);
+        }
+        return joined.toString();
     }
 
     private static String parentPath(String path) {
@@ -234,14 +245,14 @@ final class EpubOfflineIndexer {
 
     private static String decodeMarkup(byte[] bytes) {
         int sampleLength = Math.min(bytes.length, 4096);
-        String sample = new String(bytes, 0, sampleLength, StandardCharsets.ISO_8859_1);
+        String sample = new String(bytes, 0, sampleLength, LATIN1);
         Matcher xml = XML_ENCODING.matcher(sample);
         Matcher html = HTML_CHARSET.matcher(sample);
         String charsetName = xml.find() ? xml.group(1) : html.find() ? html.group(1) : "UTF-8";
         try {
             return new String(bytes, Charset.forName(charsetName));
         } catch (Throwable ignored) {
-            return new String(bytes, StandardCharsets.UTF_8);
+            return new String(bytes, UTF8);
         }
     }
 

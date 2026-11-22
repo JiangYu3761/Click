@@ -1,0 +1,16 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.click.classic" android:versionCode="1" android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="14" android:targetSdkVersion="28"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="18"/>
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
+    <application android:icon="@drawable/click_launcher" android:label="Click 经典阅读" android:theme="@android:style/Theme.Holo.Light.NoActionBar" android:allowBackup="false">
+        <activity android:name=".ReaderActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/pdf"/>
+                <data android:mimeType="application/epub+zip"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
