@@ -19161,6 +19161,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         root.addSubview(ttsPlayer)
         root.addSubview(libraryWebView)
         root.addSubview(titlebarDragView)
+        #if CLICK_SPARKLE
+        let updateControls = updates.makeLibraryControls()
+        updateControls.translatesAutoresizingMaskIntoConstraints = false
+        titlebarDragView.addSubview(updateControls)
+        NSLayoutConstraint.activate([
+            updateControls.trailingAnchor.constraint(equalTo: titlebarDragView.trailingAnchor, constant: -14),
+            updateControls.centerYAnchor.constraint(equalTo: titlebarDragView.centerYAnchor),
+        ])
+        #endif
 
         readerWebViewBottomConstraint = webView.bottomAnchor
             .constraint(

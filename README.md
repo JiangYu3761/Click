@@ -265,7 +265,7 @@ python3 scripts/public_readme_platform_smoke.py
 
 Apple 芯片、macOS 14 及以上可从 [GitHub Releases](https://github.com/JiangYu3761/Click/releases/latest) 下载 Mac 安装包。首次解压后，将 Click 放入“应用程序”再打开。当前安装包使用 Apple Development 签名，尚无 Developer ID 公证。新 Mac 的完整书库功能还需要本地 PostgreSQL。
 
-Click 菜单和阅读器“更多”都提供“检查更新…”和“自动更新”。自动更新默认开启，每四小时检查一次。安装包下载并验证签名后，Click 会自动安装并重新打开。正在填写备注或录音时，会等操作结束再重启。关闭自动更新后仍可手动检查。
+书库右上角有“自动更新”开关和“手动更新”按钮。Click 菜单和阅读器“更多”也提供“检查更新…”和“自动更新”。自动更新默认开启，每四小时检查一次。安装包下载并验证签名后，Click 会自动安装并重新打开。正在填写备注或录音时，会等操作结束再重启。关闭自动更新后仍可手动检查。
 
 发布新版本时递增 Mac 的版本和构建号，运行 `scripts/mac_update_distribution.py` 为 App 生成签名 ZIP 和 appcast.xml。将两者附到对应的 `mac-v<版本>` GitHub Release，并将该版本设为最新。签名使用发布者钥匙串中的 Click 专用密钥。
 

@@ -16,6 +16,7 @@
 @property(nonatomic, strong) ClickUpdateDriver *driver;
 @property(nonatomic, copy) BOOL (^canRestart)(void);
 @property(nonatomic, strong) NSError *startupError;
+@property(nonatomic, weak) NSButton *automaticButton;
 @end
 
 @implementation ClickUpdates
@@ -39,6 +40,21 @@
         [self.updater checkForUpdatesInBackground];
     }
 }
+- (NSView *)makeLibraryControls {
+    NSButton *automatic = [NSButton checkboxWithTitle:@"自动更新" target:self action:@selector(toggleAutomatic:)];
+    automatic.controlSize = NSControlSizeSmall;
+    automatic.state = self.updater.automaticallyChecksForUpdates ? NSControlStateValueOn : NSControlStateValueOff;
+    automatic.toolTip = @"自动检查、下载并安装新版本，完成后重新打开 Click";
+    self.automaticButton = automatic;
+    NSButton *check = [NSButton buttonWithTitle:@"手动更新" target:self action:@selector(checkNow:)];
+    check.controlSize = NSControlSizeSmall;
+    check.toolTip = @"立即检查新版本";
+    NSStackView *row = [NSStackView stackViewWithViews:@[automatic, check]];
+    row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    row.spacing = 12;
+    row.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+    return row;
+}
 - (void)addItemsToMenu:(NSMenu *)menu {
     [menu addItemWithTitle:@"检查更新…" action:@selector(checkNow:) keyEquivalent:@""].target = self;
     NSMenuItem *automatic = [menu addItemWithTitle:@"自动更新" action:@selector(toggleAutomatic:) keyEquivalent:@""];
@@ -53,11 +69,13 @@
         [self.updater checkForUpdates];
     }
 }
-- (void)toggleAutomatic:(NSMenuItem *)sender {
+- (void)toggleAutomatic:(id)sender {
     BOOL enabled = !self.updater.automaticallyChecksForUpdates;
     self.updater.automaticallyDownloadsUpdates = enabled;
     self.updater.automaticallyChecksForUpdates = enabled;
-    sender.state = enabled ? NSControlStateValueOn : NSControlStateValueOff;
+    NSControlStateValue state = enabled ? NSControlStateValueOn : NSControlStateValueOff;
+    [sender setState:state];
+    self.automaticButton.state = state;
     if (enabled && self.updater.canCheckForUpdates) [self.updater checkForUpdatesInBackground];
 }
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
