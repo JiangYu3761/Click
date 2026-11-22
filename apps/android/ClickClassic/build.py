@@ -76,6 +76,8 @@ def build(args, temp):
     for folder in (classes, dex, assets):
         folder.mkdir()
     shutil.copytree(ROOT/"licenses", assets/"licenses")
+    apache = ROOT.parent/"ClickShell/app/src/main/assets/licenses/sherpa-onnx-Apache-2.0.txt"
+    shutil.copyfile(apache, assets/"licenses/Apache-2.0.txt")
     lexicon(cache/"ecdict.csv", assets/"lexicon.db")
     with zipfile.ZipFile(cache/"pdfium.aar") as aar:
         aar.extract("classes.jar", temp)
