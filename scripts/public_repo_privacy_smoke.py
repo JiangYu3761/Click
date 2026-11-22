@@ -105,8 +105,13 @@ def main() -> int:
         for label, pattern in DISALLOWED_PATTERNS:
             if label == "non-public documentation image reference" and path.name in {".gitignore", "public_repo_privacy_smoke.py"}:
                 continue
-            for match in pattern.finditer(text):
-                line_no = text.count("\n", 0, match.start()) + 1
+            scan_text = text
+            if label == "personal GitHub handle" and path.relative_to(ROOT).as_posix() in {"README.md", "scripts/mac_update_distribution.py"}:
+                # The official public release endpoint must identify its GitHub repository.
+                public_repo = re.escape("https://github.com/") + pattern.pattern + "/Click"
+                scan_text = re.sub(public_repo + r'(?=[/"\s)])', "", text, flags=re.IGNORECASE)
+            for match in pattern.finditer(scan_text):
+                line_no = scan_text.count("\n", 0, match.start()) + 1
                 rel = path.relative_to(ROOT)
                 failures.append(f"{rel}:{line_no}: {label}: {match.group(0)}")
     if failures:

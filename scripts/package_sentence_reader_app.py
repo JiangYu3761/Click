@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from build_mac_local_voice import build_local_voice
+import mac_update_distribution as updates
+
 import hashlib
 import json
 import os
@@ -173,7 +176,8 @@ def codesign_app_bundle() -> tuple[str, str]:
         key=lambda path: len(path.parts),
         reverse=True,
     )
-    targets = [*nested_code, BUNDLED_RUNTIME_PYTHON, PYTHON_FRAMEWORK, EXECUTABLE, APP]
+    voice = RESOURCES / "ClickLocalVoice"
+    targets = [*voice.glob("*.dylib"), voice / "click-speak", *nested_code, BUNDLED_RUNTIME_PYTHON, PYTHON_FRAMEWORK, EXECUTABLE, APP]
     seen: set[Path] = set()
     for target in targets:
         if target in seen or not target.exists():
@@ -300,13 +304,13 @@ def write_runtime_manifest() -> None:
             "tingle.tombstone_replay_guard.v1",
         ],
         "owner_apps": ["Click", "Tingle"],
-        "runtime": str(RUNTIME),
-        "reader_api": str(RUNTIME / "reader_api"),
-        "requirements": str(RUNTIME / "requirements-reader-api.txt"),
+        "runtime": ".",
+        "reader_api": "reader_api",
+        "requirements": "requirements-reader-api.txt",
         "bootstrap": {
-            "script": str(RUNTIME / "scripts" / "sentence_reader_runtime_bootstrap.py"),
-            "first_run_preflight": str(RUNTIME / "scripts" / "sentence_reader_first_run_preflight.py"),
-            "runtime_config": str(RUNTIME / "scripts" / "sentence_reader_runtime_config.py"),
+            "script": "scripts/sentence_reader_runtime_bootstrap.py",
+            "first_run_preflight": "scripts/sentence_reader_first_run_preflight.py",
+            "runtime_config": "scripts/sentence_reader_runtime_config.py",
             "user_venv": "~/Library/Application Support/SentenceReader/Runtime/.venv-reader-api",
             "auto_repair_requires_env": "SENTENCE_READER_BOOTSTRAP_REPAIR=1",
             "dependency_install_requires_env": "SENTENCE_READER_BOOTSTRAP_INSTALL_DEPS=1",
@@ -315,7 +319,7 @@ def write_runtime_manifest() -> None:
             "strategy": "bundled_signed_python_framework",
             "path": "ReaderRuntime/Python3.framework/Versions/3.9/bin/python3.9",
             "exists": runtime_python.exists(),
-            "realpath": str(runtime_python.resolve(strict=False)),
+            "realpath": str(runtime_python.relative_to(RUNTIME)),
             "pyvenv_cfg": "",
             "portable_clean_mac_ready": False,
         },
@@ -450,9 +454,13 @@ def main() -> int:
         if build.stdout:
             print(build.stdout)
 
+    NATIVE_BINARY.parent.mkdir(parents=True, exist_ok=True)
+    sparkle = updates.prepare_sparkle(ROOT / "build/sparkle")
     native = subprocess.run(
         [
             "swiftc",
+            *updates.swift_link_flags(sparkle, ROOT / "build/ClickUpdates.o"),
+            "-file-prefix-map", f"{ROOT}=Click",
             str(NATIVE_SOURCE),
             "-o",
             str(NATIVE_BINARY),
@@ -489,7 +497,9 @@ def main() -> int:
         for bundle in PRODUCTS.glob("*.bundle"):
             shutil.copytree(bundle, RESOURCES / bundle.name)
 
+    updates.embed_sparkle(APP, sparkle)
     copy_reader_runtime()
+    build_local_voice(RESOURCES / "ClickLocalVoice", ROOT / "build/mac-local-voice-downloads")
     frozen_tts_hashes = copy_frozen_tts_runtime()
     icon_ready = ensure_app_icon()
     if icon_ready:
@@ -504,6 +514,7 @@ def main() -> int:
         archive.extractall(book_dir)
 
     plist = {
+        **updates.PLIST,
         "CFBundleDevelopmentRegion": "zh_CN",
         "CFBundleExecutable": "SentenceReader",
         "CFBundleIdentifier": "local.sentence-reader.v1.readium",
@@ -536,8 +547,8 @@ def main() -> int:
             },
         ],
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.5",
-        "CFBundleVersion": "6",
+        "CFBundleShortVersionString": "0.1.6",
+        "CFBundleVersion": "7",
         "DTPlatformName": "maccatalyst",
         "LSMinimumSystemVersion": "14.0",
         "LSApplicationCategoryType": "public.app-category.productivity",

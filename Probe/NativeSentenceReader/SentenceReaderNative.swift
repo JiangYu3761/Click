@@ -5,6 +5,8 @@ import Speech
 import UniformTypeIdentifiers
 import PDFKit
 import CryptoKit
+import SQLite3
+import CoreServices
 import CoreFoundation
 import Network
 import Security
@@ -831,6 +833,10 @@ private final class MacPDFReaderController: NSObject {
     var onStatus: ((String) -> Void)?
 
     private let actionBar = NSVisualEffectView()
+    private var actionBarLeft: NSLayoutConstraint!
+    private var actionBarBottom: NSLayoutConstraint!
+    private var actionAnchor: (page: PDFPage, rect: NSRect)?
+    private weak var observedClipView: NSClipView?
     private let copyButton = NSButton(title: "复制", target: nil, action: nil)
     private let highlightButton = NSButton(title: "标红", target: nil, action: nil)
     private let noteButton = NSButton(title: "备注", target: nil, action: nil)
@@ -908,6 +914,8 @@ private final class MacPDFReaderController: NSObject {
         stack.edgeInsets = NSEdgeInsets(top: 5, left: 7, bottom: 5, right: 7)
 
         [pdfView, actionBar, stack].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        actionBarLeft = actionBar.leadingAnchor.constraint(equalTo: view.leadingAnchor)
+        actionBarBottom = actionBar.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         view.addSubview(pdfView)
         view.addSubview(actionBar)
         actionBar.addSubview(stack)
@@ -916,8 +924,7 @@ private final class MacPDFReaderController: NSObject {
             pdfView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             pdfView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             pdfView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            actionBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 10),
-            actionBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            actionBarLeft, actionBarBottom,
             stack.topAnchor.constraint(equalTo: actionBar.topAnchor),
             stack.leadingAnchor.constraint(equalTo: actionBar.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: actionBar.trailingAnchor),
@@ -1017,6 +1024,18 @@ private final class MacPDFReaderController: NSObject {
     var currentPageIndex: Int {
         guard let document = pdfView.document, let page = pdfView.currentPage else { return 0 }
         return max(0, document.index(for: page))
+    }
+
+    func handlePageKey(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, event.keyCode == 123 || event.keyCode == 124,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+              pageCount > 0, !requiresPassword, !view.isHiddenOrHasHiddenAncestor,
+              let window = view.window, event.window === window, window.attachedSheet == nil,
+              let focus = window.firstResponder as? NSView, focus.isDescendant(of: view),
+              (focus as? NSTextView)?.isEditable != true
+        else { return false }
+        turn(direction: event.keyCode == 124 ? 1 : -1)
+        return true
     }
 
     func turn(direction: Int) {
@@ -1297,6 +1316,55 @@ private final class MacPDFReaderController: NSObject {
         copyButton.isEnabled = !isArea
         readButton.isEnabled = !isArea
         highlightButton.title = highlightIDsBySignature[target.signature]?.isEmpty == false ? "取消标红" : "标红"
+        observePDFScroll()
+        let pointer = view.convert(view.window?.mouseLocationOutsideOfEventStream ?? .zero, from: nil)
+        var nearest = CGFloat.infinity
+        actionAnchor = nil
+        for entry in target.rangeLocator["pages"] as? [[String: Any]] ?? [] {
+            guard let index = entry["page_index"] as? Int, let page = document?.page(at: index) else { continue }
+            for payload in entry["rects"] as? [[String: Any]] ?? [] {
+                let rect = ClickPDFAnnotationProjection.denormalizedRect(payload, page: page)
+                let visible = view.convert(pdfView.convert(rect, from: page), from: pdfView).intersection(view.bounds)
+                guard !visible.isEmpty else { continue }
+                let distance = hypot(pointer.x - max(visible.minX, min(pointer.x, visible.maxX)),
+                                     pointer.y - max(visible.minY, min(pointer.y, visible.maxY)))
+                if distance < nearest {
+                    nearest = distance
+                    actionAnchor = (page, rect)
+                }
+            }
+        }
+        positionActionBar()
+    }
+
+    private func observePDFScroll() {
+        guard let clip = pdfView.documentView?.enclosingScrollView?.contentView,
+              clip !== observedClipView else { return }
+        if let old = observedClipView {
+            NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: old)
+        }
+        observedClipView = clip
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(pdfScrolled(_:)),
+                                               name: NSView.boundsDidChangeNotification, object: clip)
+    }
+
+    @objc private func pdfScrolled(_ notification: Notification) { positionActionBar() }
+
+    private func positionActionBar() {
+        guard pendingTarget != nil, let anchor = actionAnchor else { actionBar.isHidden = true; return }
+        let rect = view.convert(pdfView.convert(anchor.rect, from: anchor.page), from: pdfView)
+            .intersection(view.bounds)
+        let area = view.bounds.insetBy(dx: 6, dy: 6)
+        let size = actionBar.fittingSize
+        guard !rect.isEmpty, area.width >= size.width, area.height >= size.height else {
+            actionBar.isHidden = true
+            return
+        }
+        let above = rect.maxY + 6
+        let y = above + size.height <= area.maxY ? above : rect.minY - 6 - size.height
+        actionBarLeft.constant = min(max(area.minX, rect.midX - size.width / 2), area.maxX - size.width)
+        actionBarBottom.constant = -min(max(area.minY, y), area.maxY - size.height)
         actionBar.isHidden = false
     }
 
@@ -1469,6 +1537,7 @@ private final class MacPDFReaderController: NSObject {
 
     private func dismissActions(clearSelection: Bool = true) {
         pendingTarget = nil
+        actionAnchor = nil
         actionBar.isHidden = true
         if clearSelection { pdfView.clearSelection() }
     }
@@ -1490,6 +1559,7 @@ private final class MacPDFReaderController: NSObject {
     }
 
     @objc private func scaleChanged(_ notification: Notification) {
+        positionActionBar()
         publishPosition()
     }
 
@@ -1917,8 +1987,140 @@ private final class LookupActionTarget: NSObject {
         super.init()
     }
 
-    @objc func perform(_ sender: NSButton) {
+    @objc func invokeLookupAction(_ sender: NSButton) {
         action()
+    }
+}
+
+private enum LookupPronunciation {
+    static func label(word: String, dictionary: [String: Any]?,
+                      index: URL? = Bundle.main.resourceURL?.appendingPathComponent("ClickLocalVoice/pronunciation.sqlite")) -> String {
+        if let index, let ipa = americanIPA(word: word, index: index) { return "美 " + ipa }
+        let entry = (dictionary?["term"] as? String) ?? ""
+        let ipa = (dictionary?["phonetic"] as? String ?? "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/[]").union(.whitespacesAndNewlines))
+        if !ipa.isEmpty, entry.caseInsensitiveCompare(word) == .orderedSame { return "/\(ipa)/" }
+
+        // Dictionary Services may return an inflection's headword, e.g. "believe" for "believing".
+        if let definition = DCSCopyTextDefinition(nil, word as CFString, CFRangeMake(0, word.utf16.count))?.takeRetainedValue() as String? {
+            let parts = definition.prefix(320).components(separatedBy: "|")
+            if parts.count >= 3 {
+                let head = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                let phones = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !head.isEmpty, !phones.isEmpty, phones.count <= 100 {
+                    let label = phones.replacingOccurrences(of: "BrE ", with: "英 ")
+                        .replacingOccurrences(of: ", AmE ", with: "   美 ")
+                    let transcription = label == phones ? "/\(phones)/" : label
+                    return head.caseInsensitiveCompare(word) == .orderedSame ? transcription : "\(head) · \(transcription)"
+                }
+            }
+        }
+        if !entry.isEmpty, !ipa.isEmpty { return "\(entry) · /\(ipa)/" }
+        return "暂无词典音标"
+    }
+
+    private static func americanIPA(word: String, index: URL) -> String? {
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        guard sqlite3_open_v2(index.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return nil }
+        var query: OpaquePointer?
+        defer { sqlite3_finalize(query) }
+        guard sqlite3_prepare_v2(db, "SELECT ipa FROM pronunciations WHERE word = ?", -1, &query, nil) == SQLITE_OK else { return nil }
+        let key = word.lowercased().replacingOccurrences(of: "’", with: "'")
+        return key.withCString { chars in
+            guard sqlite3_bind_text(query, 1, chars, -1, nil) == SQLITE_OK,
+                  sqlite3_step(query) == SQLITE_ROW, let text = sqlite3_column_text(query, 0) else { return nil }
+            return String(cString: text)
+        }
+    }
+}
+
+private final class LocalReaderSpeech {
+    private let runtime: URL?
+    private let systemSpeech = AVSpeechSynthesizer()
+    private var synthesis: Process?
+    private var player: AVAudioPlayer?
+    private var pendingKey: String?
+    private var cached: (key: String, data: Data)?
+
+    init(runtime: URL? = Bundle.main.resourceURL?.appendingPathComponent("ClickLocalVoice")) {
+        self.runtime = runtime
+    }
+
+    func stop() {
+        pendingKey = nil
+        if let process = synthesis, process.isRunning { process.terminate() }
+        synthesis = nil
+        player?.stop()
+        player = nil
+        if systemSpeech.isSpeaking { systemSpeech.stopSpeaking(at: .immediate) }
+    }
+
+    func speak(_ input: String, chinese: Bool, status: @escaping (String) -> Void) {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let key = (chinese ? "zh:" : "en:") + text
+        // An additional tap while the first audio is being prepared shares that request.
+        if pendingKey == key { return }
+        stop()
+        if let cached, cached.key == key, play(cached.data) { status("正在重播 · Kokoro"); return }
+        guard let runtime else { systemFallback(text, chinese: chinese, status: status); return }
+        let process = Process()
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let output = temp.appendingPathComponent("speech.wav")
+        do {
+            try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: false,
+                                                   attributes: [.posixPermissions: 0o700])
+            let inputURL = temp.appendingPathComponent("text")
+            try Data(text.utf8).write(to: inputURL)
+            let handle = try FileHandle(forReadingFrom: inputURL)
+            defer { try? handle.close() }
+            try FileManager.default.removeItem(at: inputURL)
+            process.executableURL = runtime.appendingPathComponent("click-speak")
+            process.currentDirectoryURL = runtime.appendingPathComponent("model")
+            process.arguments = [chinese ? "zh" : "en", output.path]
+            process.standardInput = handle
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { [weak self] finished in
+                let data = finished.terminationStatus == 0 ? try? Data(contentsOf: output) : nil
+                try? FileManager.default.removeItem(at: temp)
+                DispatchQueue.main.async {
+                    guard let self, self.synthesis === finished else { return }
+                    self.synthesis = nil
+                    self.pendingKey = nil
+                    if let data, self.play(data) {
+                        if data.count <= 8 * 1024 * 1024 { self.cached = (key, data) }
+                        status("正在朗读 · Kokoro")
+                    } else {
+                        self.systemFallback(text, chinese: chinese, status: status)
+                    }
+                }
+            }
+            try process.run()
+            synthesis = process
+            pendingKey = key
+            status("正在准备本地自然语音")
+        } catch {
+            try? FileManager.default.removeItem(at: temp)
+            systemFallback(text, chinese: chinese, status: status)
+        }
+    }
+
+    private func play(_ data: Data) -> Bool {
+        guard let audio = try? AVAudioPlayer(data: data), audio.play() else { return false }
+        player = audio
+        return true
+    }
+
+    private func systemFallback(_ text: String, chinese: Bool, status: (String) -> Void) {
+        let language = chinese ? "zh-CN" : "en-US"
+        let utterance = AVSpeechUtterance(string: text)
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language && $0.quality.rawValue > 1 }
+        utterance.voice = voices.max { $0.quality.rawValue < $1.quality.rawValue }
+            ?? AVSpeechSynthesisVoice(language: language)
+        systemSpeech.speak(utterance)
+        status("正在朗读 · 系统语音")
     }
 }
 
@@ -2831,116 +3033,6 @@ final class ReaderAPIClient {
         }
         components.queryItems = queryItems
         return request(method: "GET", path: components.string ?? "/books/\(bookID)/lookup", body: nil) as? [String: Any]
-    }
-
-    func lookupTTS(text: String, voice: String? = nil) -> URL? {
-        let url = baseURL.appendingPathComponent("lookup/tts")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 20
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["text": text]
-        if let voice, !voice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body["voice"] = voice
-        }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var payload: [String: Any]?
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  let data,
-                  !data.isEmpty
-            else {
-                return
-            }
-            payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        }
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 21)
-
-        guard payload?["ok"] as? Bool == true,
-              let audioPath = payload?["audio_url"] as? String,
-              !audioPath.isEmpty
-        else {
-            return nil
-        }
-        if let absolute = URL(string: audioPath), absolute.scheme != nil {
-            return absolute
-        }
-        let relativePath = audioPath.hasPrefix("/") ? String(audioPath.dropFirst()) : audioPath
-        return baseURL.appendingPathComponent(relativePath)
-    }
-
-    func lookupTTSData(text: String, voice: String? = nil) -> Data? {
-        guard let audioURL = lookupTTS(text: text, voice: voice) else {
-            return nil
-        }
-        return downloadLookupAudioData(from: audioURL)
-    }
-
-    func lookupCachedTTSData(text: String, voice: String? = nil) -> Data? {
-        let url = baseURL.appendingPathComponent("lookup/tts/status")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 0.35
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        var body: [String: Any] = ["text": text]
-        if let voice, !voice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body["voice"] = voice
-        }
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var payload: [String: Any]?
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  let data,
-                  !data.isEmpty
-            else {
-                return
-            }
-            payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        }
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 0.45)
-
-        guard payload?["cached"] as? Bool == true,
-              let audioPath = payload?["audio_url"] as? String,
-              !audioPath.isEmpty
-        else {
-            return nil
-        }
-        if let absolute = URL(string: audioPath), absolute.scheme != nil {
-            return downloadLookupAudioData(from: absolute)
-        }
-        let relativePath = audioPath.hasPrefix("/") ? String(audioPath.dropFirst()) : audioPath
-        return downloadLookupAudioData(from: baseURL.appendingPathComponent(relativePath))
-    }
-
-    private func downloadLookupAudioData(from audioURL: URL) -> Data? {
-        var request = URLRequest(url: audioURL)
-        request.timeoutInterval = 20
-        let semaphore = DispatchSemaphore(value: 0)
-        var audioData: Data?
-        let task = URLSession.shared.dataTask(with: request) { data, response, _ in
-            defer { semaphore.signal() }
-            guard let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  let data,
-                  !data.isEmpty
-            else {
-                return
-            }
-            audioData = data
-        }
-        task.resume()
-        _ = semaphore.wait(timeout: .now() + 21)
-        return audioData
     }
 
     func updateVocabItem(bookID: String, itemID: String, status: String) -> Bool {
@@ -17503,14 +17595,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var currentBookEntry: BookEntry?
     private var readerSettings = ReaderSettings.defaultSettings
     private let readerAPI = ReaderAPIClient()
-    private let speechSynthesizer = AVSpeechSynthesizer()
-    private var lookupAudioPlayer: AVPlayer?
-    private var lookupAudioDataPlayer: AVAudioPlayer?
+    private let lookupSpeech = LocalReaderSpeech()
     private var pdfAudioPlayer: AVAudioPlayer?
     private var playingPDFAudioNoteID: String?
-    private var lookupSoundPlayer: NSSound?
-    private var lookupAudioProcess: Process?
-    private var lookupActionTargets: [LookupActionTarget] = []
     private let readingPositionKeyPrefix = "SentenceReader.lastReadingPosition.v1"
     private let bookLibraryKey = "SentenceReader.bookLibrary.v1"
     private let readerSettingsKey = "SentenceReader.readerSettings.v1"
@@ -17823,12 +17910,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         return resultURL
     }
 
+    #if CLICK_SPARKLE
+    private lazy var updates = ClickUpdates(canRestart: { [weak self] in
+        guard let self else { return true }
+        return self.window?.attachedSheet == nil && !self.hasActiveUserAudioWork()
+    })
+    #endif
+
     private func installApplicationMenu() {
         let mainMenu = NSMenu()
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
 
-        let appMenu = NSMenu(title: "Sentence Reader")
+        let appMenu = NSMenu(title: "Click")
+        #if CLICK_SPARKLE
+        updates.addItems(to: appMenu)
+        appMenu.addItem(.separator())
+        #endif
         let quitItem = NSMenuItem(title: "退出 Sentence Reader", action: #selector(quitApplication(_:)), keyEquivalent: "q")
         quitItem.keyEquivalentModifierMask = [.command]
         quitItem.target = self
@@ -17874,6 +17972,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             finishApplicationLaunch()
             return
         }
+        #if CLICK_SPARKLE
+        updates.start()
+        #endif
         NSApp.activate(ignoringOtherApps: true)
         if restoreDocumentsAccess() || canReadDocumentsDirectory() {
             finishApplicationLaunch()
@@ -18112,6 +18213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        lookupSpeech.stop()
         mainWindowOrderedOutForListening = false
         gate1AcceptanceWatchdog?.cancel()
         gate1AcceptanceWatchdog = nil
@@ -18271,6 +18373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             if self.libraryHomeWebView?.isHidden == false {
                 return event
             }
+
+            if self.isPDFReadingMode, self.pdfReader.handlePageKey(event) { return nil }
 
             if event.type == .mouseMoved {
                 let point = event.locationInWindow
@@ -18471,6 +18575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     }
 
     private func showMainLibrary() {
+        lookupSpeech.stop()
         guard let libraryHomeWebView,
               let url = mainLibraryURL() else {
             statusLabel.stringValue = "主界面需要 Reader API，当前无法打开书库"
@@ -20314,6 +20419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     @discardableResult
     private func loadBookEntry(_ entry: BookEntry) -> Bool {
+        lookupSpeech.stop()
         resetReadingCore()
         pdfAnnotationRefreshGeneration += 1
         pdfAudioPollWorkItems.values.forEach { $0.cancel() }
@@ -20504,6 +20610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         webView.isHidden = true
         comicReader.webView.isHidden = true
         pdfReader.view.isHidden = false
+        window.makeFirstResponder(pdfReader.pdfView)
         pdfAreaButton.isHidden = false
         ReadingTTSControlStyle.setSymbol(
             pdfAreaButton,
@@ -22401,6 +22508,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             item.target = self
             menu.addItem(item)
         }
+        #if CLICK_SPARKLE
+        menu.addItem(.separator())
+        updates.addItems(to: menu)
+        #endif
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
 
@@ -23554,13 +23665,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private func speakPDFTextLocally(_ text: String) {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return }
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: cleaned)
-        let containsChinese = cleaned.range(of: #"[\p{Han}]"#, options: .regularExpression) != nil
-        utterance.voice = AVSpeechSynthesisVoice(language: containsChinese ? "zh-CN" : "en-US")
-        utterance.rate = containsChinese ? 0.47 : 0.44
-        speechSynthesizer.speak(utterance)
-        statusLabel.stringValue = "正在使用 Mac 本地语音朗读 PDF"
+        let chinese = cleaned.range(of: #"[\p{Han}]"#, options: .regularExpression) != nil
+        speakReaderText(cleaned, chinese: chinese)
     }
 
     private func readerAPIScriptCandidates() -> [URL] {
@@ -26892,12 +26998,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         alert.messageText = ""
         alert.informativeText = ""
 
-        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 430, height: 172))
-        lookupActionTargets.removeAll()
+        let phonetic = LookupPronunciation.label(word: displayWord, dictionary: item?["dictionary"] as? [String: Any])
+        let accessory = NSView(frame: NSRect(x: 0, y: 0, width: 430, height: 199))
+        var lookupActionTargets: [LookupActionTarget] = []
         func makeLookupActionButton(title: String, symbolName: String?, frame: NSRect, action: @escaping () -> Void) -> NSButton {
             let target = LookupActionTarget(action: action)
             lookupActionTargets.append(target)
-            let button = NSButton(title: title, target: target, action: #selector(LookupActionTarget.perform(_:)))
+            let button = NSButton(title: title, target: target, action: #selector(LookupActionTarget.invokeLookupAction(_:)))
             button.frame = frame
             button.bezelStyle = .rounded
             button.font = NSFont(name: "Microsoft YaHei", size: 13) ?? NSFont.systemFont(ofSize: 13, weight: .medium)
@@ -26912,11 +27019,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
         let wordTarget = LookupActionTarget { [weak self] in
             self?.statusLabel.stringValue = "已点击单词，准备朗读：\(displayWord)"
-            self?.speakEnglish(displayWord)
+            self?.speakReaderText(displayWord, chinese: false)
         }
         lookupActionTargets.append(wordTarget)
-        let clickableWordButton = LookupWordButton(title: displayWord, target: wordTarget, action: #selector(LookupActionTarget.perform(_:)))
-        clickableWordButton.frame = NSRect(x: 0, y: 118, width: 430, height: 52)
+        let clickableWordButton = LookupWordButton(title: displayWord, target: wordTarget, action: #selector(LookupActionTarget.invokeLookupAction(_:)))
+        clickableWordButton.frame = NSRect(x: 0, y: 145, width: 430, height: 52)
         clickableWordButton.setButtonType(.momentaryPushIn)
         clickableWordButton.bezelStyle = .rounded
         clickableWordButton.isBordered = true
@@ -26933,6 +27040,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         clickableWordButton.alignment = .center
         clickableWordButton.contentTintColor = NSColor.labelColor
         accessory.addSubview(clickableWordButton)
+        let pronunciation = NSTextField(labelWithString: phonetic)
+        pronunciation.frame = NSRect(x: 0, y: 117, width: 430, height: 23)
+        pronunciation.font = .systemFont(ofSize: 16)
+        pronunciation.alignment = .center
+        pronunciation.textColor = .secondaryLabelColor
+        pronunciation.toolTip = phonetic
+        accessory.addSubview(pronunciation)
 
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 48, width: 430, height: 64))
         let textView = NSTextView(frame: scroll.bounds)
@@ -26964,14 +27078,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             symbolName: "text.bubble.fill",
             frame: NSRect(x: 0, y: buttonY, width: 92, height: 30)
         ) { [weak self] in
-            self?.speakChineseMeaning(speakMeaning)
+            self?.speakReaderText(speakMeaning, chinese: true)
         }
         accessory.addSubview(readMeaningButton)
 
         if item != nil {
             var showingEvidence = false
-            var evidenceButton: NSButton?
-            evidenceButton = makeLookupActionButton(
+            weak var evidenceButton: NSButton?
+            let button = makeLookupActionButton(
                 title: "证据",
                 symbolName: "doc.text.magnifyingglass",
                 frame: NSRect(x: 100, y: buttonY, width: 82, height: 30)
@@ -26986,9 +27100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
                 textView.textContainerInset = showingEvidence ? NSSize(width: 0, height: 4) : NSSize(width: 0, height: 17)
                 evidenceButton?.title = showingEvidence ? "释义" : "证据"
             }
-            if let evidenceButton {
-                accessory.addSubview(evidenceButton)
-            }
+            evidenceButton = button
+            accessory.addSubview(button)
         } else {
             let noteButton = makeLookupActionButton(
                 title: "添加备注",
@@ -27034,16 +27147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         alert.accessoryView = accessory
         alert.addButton(withTitle: "关闭")
 
-        alert.beginSheetModal(for: window) { response in
-            _ = response
-            self.lookupActionTargets.removeAll()
+        alert.beginSheetModal(for: window) { [weak self, lookupActionTargets] _ in
+            // AppKit controls hold their targets weakly for the lifetime of the sheet.
+            withExtendedLifetime(lookupActionTargets) { self?.lookupSpeech.stop() }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, self.window.attachedSheet != nil else {
-                return
-            }
-            self.speakEnglish(displayWord)
-        }
+        speakReaderText(displayWord, chinese: false)
     }
 
     private func showLookupCorrectionPanel(
@@ -27241,137 +27349,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         }
     }
 
-    private func playLookupAudioData(_ data: Data, status: String) -> Bool {
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        lookupAudioPlayer?.pause()
-        lookupAudioProcess?.terminate()
-        lookupAudioProcess = nil
-        do {
-            let audioURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("click-lookup-tts-\(UUID().uuidString)")
-                .appendingPathExtension("mp3")
-            try data.write(to: audioURL, options: .atomic)
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
-            process.arguments = [audioURL.path]
-            process.terminationHandler = { _ in
-                try? FileManager.default.removeItem(at: audioURL)
-            }
-            try process.run()
-            lookupAudioProcess = process
-            statusLabel.stringValue = status
-            return true
-        } catch {
-            statusLabel.stringValue = "afplay 播放失败，尝试 App 内播放器：\(error.localizedDescription)"
+    private func speakReaderText(_ text: String, chinese: Bool) {
+        lookupSpeech.speak(text, chinese: chinese) { [weak self] message in
+            self?.statusLabel.stringValue = message
         }
-        if let sound = NSSound(data: data) {
-            lookupSoundPlayer?.stop()
-            sound.volume = 1.0
-            lookupSoundPlayer = sound
-            let ok = sound.play()
-            statusLabel.stringValue = ok ? status : "音频已生成，但 NSSound 未能启动"
-            if ok {
-                return true
-            }
-        }
-        do {
-            let player = try AVAudioPlayer(data: data)
-            player.prepareToPlay()
-            lookupAudioDataPlayer = player
-            let ok = player.play()
-            statusLabel.stringValue = ok ? status : "音频已生成，但播放器未能启动"
-            return ok
-        } catch {
-            statusLabel.stringValue = "音频播放失败：\(error.localizedDescription)"
-            return false
-        }
-    }
-
-    private func speakEnglish(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            statusLabel.stringValue = "没有可朗读的英文"
-            return
-        }
-        if isPDFReadingMode {
-            speakEnglishFallback(trimmed)
-            return
-        }
-        statusLabel.stringValue = "正在准备英文朗读"
-        DispatchQueue.global(qos: .utility).async { [readerAPI] in
-            let audioData = readerAPI.lookupCachedTTSData(text: trimmed, voice: "en-US-BrianNeural")
-            DispatchQueue.main.async {
-                if let audioData,
-                   self.playLookupAudioData(audioData, status: "正在朗读英文：\(trimmed)") {
-                    return
-                } else {
-                    self.statusLabel.stringValue = "首次生成高质量读音，先用本机语音朗读：\(trimmed)"
-                    self.speakEnglishFallback(trimmed)
-                    DispatchQueue.global(qos: .utility).async {
-                        _ = readerAPI.lookupTTS(text: trimmed, voice: "en-US-BrianNeural")
-                    }
-                }
-            }
-        }
-    }
-
-    private func speakEnglishFallback(_ text: String) {
-        lookupAudioProcess?.terminate()
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-        process.arguments = ["-v", "Samantha", text]
-        do {
-            try process.run()
-            lookupAudioProcess = process
-            statusLabel.stringValue = "正在用本机语音朗读英文：\(text)"
-            return
-        } catch {
-            statusLabel.stringValue = "本机 say 启动失败，退回系统语音：\(error.localizedDescription)"
-        }
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.38
-        utterance.pitchMultiplier = 0.92
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        speechSynthesizer.speak(utterance)
-        statusLabel.stringValue = "正在朗读英文：\(text)"
-    }
-
-    private func speakChineseMeaning(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            statusLabel.stringValue = "没有可朗读的释义"
-            return
-        }
-        if isPDFReadingMode {
-            speakChineseFallback(trimmed)
-            return
-        }
-        statusLabel.stringValue = "正在准备释义朗读"
-        DispatchQueue.global(qos: .utility).async { [readerAPI] in
-            let audioData = readerAPI.lookupCachedTTSData(text: trimmed, voice: "zh-CN-YunjianNeural")
-            DispatchQueue.main.async {
-                if let audioData,
-                   self.playLookupAudioData(audioData, status: "正在朗读释义：\(trimmed)") {
-                    return
-                } else {
-                    self.statusLabel.stringValue = "首次生成高质量释义朗读，先用本机语音朗读"
-                    self.speakChineseFallback(trimmed)
-                    DispatchQueue.global(qos: .utility).async {
-                        _ = readerAPI.lookupTTS(text: trimmed, voice: "zh-CN-YunjianNeural")
-                    }
-                }
-            }
-        }
-    }
-
-    private func speakChineseFallback(_ text: String) {
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN")
-        utterance.rate = 0.44
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        speechSynthesizer.speak(utterance)
-        statusLabel.stringValue = "正在朗读释义：\(text)"
     }
 
     private func updateVocabItemStatus(bookID: String, itemID: String, status: String, word: String) {
@@ -29298,6 +29279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
       let selectionActionTimer = 0;
       let suppressSelectionActionBarUntil = 0;
       let selectionDragStart = null;
+      let selectionDragEnd = null;
       let selectionDragMoved = false;
       let selectionDragAllowedUntil = 0;
       let selectionGestureActive = false;
@@ -29350,6 +29332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         const indexes = [];
         const sentences = Array.from(document.querySelectorAll('.sr-sentence'));
         let anchorRect = null;
+        let nearest = Infinity;
         for (let rangeIndex = 0; rangeIndex < selection.rangeCount; rangeIndex += 1) {
           const selectionRange = selection.getRangeAt(rangeIndex);
           sentences.forEach(function (sentence) {
@@ -29380,20 +29363,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
               text: text
             });
             if (indexes.indexOf(sentenceIndex) < 0) { indexes.push(sentenceIndex); }
-            if (!anchorRect && clipped.getBoundingClientRect) {
-              const rect = clipped.getBoundingClientRect();
-              if (rect && rect.width >= 0 && rect.height >= 0) {
-                anchorRect = rect;
+            for (const line of clipped.getClientRects()) {
+              const left = Math.max(0, line.left), right = Math.min(window.innerWidth, line.right);
+              const top = Math.max(0, line.top), bottom = Math.min(window.innerHeight, line.bottom);
+              if (right <= left || bottom <= top) { continue; }
+              const pointer = selectionDragEnd || { x: left, y: top };
+              const distance = Math.hypot(pointer.x - Math.max(left, Math.min(pointer.x, right)),
+                                          pointer.y - Math.max(top, Math.min(pointer.y, bottom)));
+              if (distance < nearest) {
+                nearest = distance;
+                anchorRect = { left, right, top, bottom };
               }
             }
             clipped.detach && clipped.detach();
           });
         }
         if (!fragments.length) { return null; }
-        if (!anchorRect) {
-          const firstRange = selection.getRangeAt(0);
-          anchorRect = firstRange.getBoundingClientRect ? firstRange.getBoundingClientRect() : null;
-        }
         return {
           text: rawText,
           normalizedText: normalizedText,
@@ -29473,17 +29458,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         activeSelectionPayload = payload;
         updateSelectionActionBarState(payload);
         const rect = payload && payload.rect;
-        const width = 262;
-        const viewportWidthValue = Math.max(320, window.innerWidth || document.documentElement.clientWidth || 0);
-        const viewportHeightValue = Math.max(240, window.innerHeight || document.documentElement.clientHeight || 0);
-        const centerX = rect ? (rect.left + rect.right) / 2 : viewportWidthValue / 2;
-        const topCandidate = rect ? rect.top - 46 : 18;
-        const fallbackTop = rect ? rect.bottom + 8 : 18;
-        const top = Math.max(8, Math.min(viewportHeightValue - 44, topCandidate < 8 ? fallbackTop : topCandidate));
-        const left = Math.max(8, Math.min(viewportWidthValue - width - 8, centerX - width / 2));
-        bar.style.left = left + 'px';
-        bar.style.top = top + 'px';
+        if (!rect) { hideSelectionActionBar(); return; }
         bar.classList.add('sr-visible');
+        const size = bar.getBoundingClientRect();
+        const above = rect.top - size.height - 6;
+        const top = above >= 6 ? above : rect.bottom + 6;
+        const left = (rect.left + rect.right - size.width) / 2;
+        bar.style.left = Math.max(6, Math.min(window.innerWidth - size.width - 6, left)) + 'px';
+        bar.style.top = Math.max(6, Math.min(window.innerHeight - size.height - 6, top)) + 'px';
       }
       function scheduleSelectionActionBarUpdate() {
         if (selectionActionTimer) { window.clearTimeout(selectionActionTimer); }
@@ -29532,6 +29514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         selectionGestureActive = true;
         lastSelectionPointerActivityAt = Date.now();
         selectionDragStart = pointFromEvent(event);
+        selectionDragEnd = selectionDragStart;
         selectionDragMoved = false;
       }
       function updateSelectionActionDrag(event) {
@@ -29539,6 +29522,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         if (typeof event.buttons === 'number' && event.buttons !== 0 && (event.buttons & 1) !== 1) { return; }
         lastSelectionPointerActivityAt = Date.now();
         const point = pointFromEvent(event);
+        selectionDragEnd = point;
         const dx = point.x - selectionDragStart.x;
         const dy = point.y - selectionDragStart.y;
         if (Math.sqrt(dx * dx + dy * dy) >= 8) {

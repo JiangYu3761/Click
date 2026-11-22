@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -50,42 +51,17 @@ def main() -> int:
     for marker in [
         "func correctLookupMeaning(bookID: String, word: String, meaning: String, sentenceIndex: String?, sentence: String?) -> [String: Any]?",
         "path: \"/books/\\(bookID)/lookup-corrections\"",
-        "func lookupTTS(text: String, voice: String? = nil) -> URL?",
-        "func lookupTTSData(text: String, voice: String? = nil) -> Data?",
-        "func lookupCachedTTSData(text: String, voice: String? = nil) -> Data?",
-        "baseURL.appendingPathComponent(\"lookup/tts/status\")",
-        "private func downloadLookupAudioData",
-        "private var lookupAudioPlayer: AVPlayer?",
-        "private var lookupAudioDataPlayer: AVAudioPlayer?",
-        "private var lookupSoundPlayer: NSSound?",
-        "private var lookupAudioProcess: Process?",
-        "private var lookupActionTargets: [LookupActionTarget] = []",
+        "private final class LocalReaderSpeech",
         "private final class LookupWordButton",
         "acceptsFirstMouse",
-        "private func playLookupAudioData",
-        "/usr/bin/afplay",
-        "process.run()",
-        "NSSound(data: data)",
+        "LookupPronunciation.label",
         "AVAudioPlayer(data: data)",
-        "private func speakChineseMeaning",
-        "private func speakChineseFallback",
-        "private func speakEnglishFallback",
-        "lookupCachedTTSData(text: trimmed, voice: \"en-US-BrianNeural\")",
-        "lookupTTS(text: trimmed, voice: \"en-US-BrianNeural\")",
-        "lookupCachedTTSData(text: trimmed, voice: \"zh-CN-YunjianNeural\")",
-        "lookupTTS(text: trimmed, voice: \"zh-CN-YunjianNeural\")",
-        "首次生成高质量读音，先用本机语音朗读",
-        "首次生成高质量释义朗读，先用本机语音朗读",
-        "URL(fileURLWithPath: \"/usr/bin/say\")",
-        "\"Samantha\"",
-        "request.timeoutInterval = 0.35",
-        "semaphore.wait(timeout: .now() + 0.45)",
+        "self.synthesis === finished",
         "private func decorateLookupActionButtons",
         "private static func lookupPartOfSpeechTitle",
         "private static func lookupPartOfSpeechShortTitle",
         "读释义",
         "speaker.wave.2.fill",
-        "en-US-BrianNeural",
         ".sr-word-focused",
         "function focusWordHit",
         "function lookupWordHitFromEvent",
@@ -102,7 +78,7 @@ def main() -> int:
         "clickableWordButton.alignment = .center",
         "已点击单词，准备朗读",
         "LookupActionTarget { [weak self] in",
-        "DispatchQueue.main.asyncAfter(deadline: .now() + 0.25)",
+        "withExtendedLifetime(lookupActionTargets)",
         "title: \"读释义\"",
         "title: \"证据\"",
         "title: \"纠错\"",
@@ -110,8 +86,8 @@ def main() -> int:
         "showLookupCorrectionPanel(",
         "textView.alignment = .center",
         "textView.textContainerInset = NSSize(width: 0, height: 17)",
-        "speakChineseMeaning",
-        "speakEnglish(displayWord)",
+        "speakReaderText(speakMeaning, chinese: true)",
+        "speakReaderText(displayWord, chinese: false)",
         "alert.addButton(withTitle: \"关闭\")",
     ]:
         require(show_lookup, marker)
@@ -138,10 +114,9 @@ def main() -> int:
         if forbidden in show_lookup:
             fail(f"default lookup card still contains primary evidence/noise marker `{forbidden}`")
 
-    if "focusWordHit(hit);" not in text or "post({ type: 'lookup', word: hit.word" not in text:
-        fail("single-click lookup does not use word-level focus before posting lookup")
-    if "focus(sentence);\n          const hit" in text:
-        fail("single-click lookup still focuses the whole sentence before word lookup")
+    ordinary_click = text.split("claimSentenceEvent(event);\n            focusWordHit(hit);", 1)
+    if len(ordinary_click) != 2 or not re.search(r"post\(\{\s*type: 'lookup',\s*word: hit.word", ordinary_click[1].split("return;", 1)[0]):
+        fail("ordinary click must focus the word and post the lookup")
 
     for marker in [
         "这些信息用于复核，不作为默认查词内容。",

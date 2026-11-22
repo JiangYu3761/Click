@@ -215,7 +215,7 @@ flowchart LR
 
 当前版本适合在开发机和同一局域网内使用，还不是最终公开发行版。
 
-- 还没有正式签名安装包
+- Mac 安装包使用 Apple Development 签名
 - 还不是原生 iPad App
 - 还没有云同步
 - 还不适合公网访问
@@ -261,9 +261,17 @@ python3 scripts/public_readme_platform_smoke.py
 .venv-reader-api/bin/python scripts/reader_api_static_smoke.py
 ```
 
-## 不进入 GitHub 的内容
+## Mac 安装与更新
 
-为了避免仓库臃肿和泄露私人数据，GitHub 不包含：
+Apple 芯片、macOS 14 及以上可从 [GitHub Releases](https://github.com/JiangYu3761/Click/releases/latest) 下载 Mac 安装包。首次解压后，将 Click 放入“应用程序”再打开。当前安装包使用 Apple Development 签名，尚无 Developer ID 公证。新 Mac 的完整书库功能还需要本地 PostgreSQL。
+
+Click 菜单和阅读器“更多”都提供“检查更新…”和“自动更新”。自动更新默认开启，每四小时检查一次。安装包下载并验证签名后，Click 会自动安装并重新打开。正在填写备注或录音时，会等操作结束再重启。关闭自动更新后仍可手动检查。
+
+发布新版本时递增 Mac 的版本和构建号，运行 `scripts/mac_update_distribution.py` 为 App 生成签名 ZIP 和 appcast.xml。将两者附到对应的 `mac-v<版本>` GitHub Release，并将该版本设为最新。签名使用发布者钥匙串中的 Click 专用密钥。
+
+## 不进入 Git 仓库的内容
+
+源码仓库不包含：
 
 - 真实书籍
 - 本地数据库
@@ -275,7 +283,7 @@ python3 scripts/public_readme_platform_smoke.py
 - 未脱敏的真实界面截图
 - 书籍封面或阅读内容图片
 
-GitHub 只保存源码、文档、迁移脚本、小型测试样本，以及经过逐项复核的脱敏产品截图。公开截图会替换书名、作者、正文、备注、红标内容、统计和设备信息，并在画面或说明中标注为演示数据。
+Git 仓库只保存源码、文档、迁移脚本、小型测试样本，以及经过逐项复核的脱敏产品截图。公开截图会替换书名、作者、正文、备注、红标内容、统计和设备信息，并在画面或说明中标注为演示数据。
 
 ## 文档入口
 
