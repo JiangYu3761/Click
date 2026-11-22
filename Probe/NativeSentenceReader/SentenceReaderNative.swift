@@ -229,6 +229,10 @@ private final class WindowDragView: NSView {
     }
 }
 
+private enum MacPDFFit: String {
+    case height, width
+}
+
 private enum MacPDFPageMode: String {
     case automatic
     case single
@@ -579,6 +583,7 @@ private final class ClickPDFView: PDFView {
     var onChromeToggle: (() -> Void)?
     var areaSelectionMode = false
     var discretePagingEnabled = true
+    var scrollsOverflow: ((NSEvent) -> Bool)?
 
     private var wheelAccumulation: CGFloat = 0
     private var wheelDirection = 0
@@ -594,7 +599,7 @@ private final class ClickPDFView: PDFView {
     private var pendingWordLookupWorkItem: DispatchWorkItem?
 
     override func scrollWheel(with event: NSEvent) {
-        guard discretePagingEnabled else {
+        guard discretePagingEnabled, scrollsOverflow?(event) != true else {
             super.scrollWheel(with: event)
             return
         }
@@ -847,6 +852,8 @@ private final class MacPDFReaderController: NSObject {
     private var annotationsByID: [String: [String: Any]] = [:]
     private var audioNotesByAnnotationID: [String: [[String: Any]]] = [:]
     private(set) var pageMode: MacPDFPageMode = .automatic
+    private(set) var fitMode: MacPDFFit = .height
+    private var applyingFit = false
     private var viewportWidth: CGFloat = 1180
     private var suppressPositionEvents = false
     private(set) var lastError = ""
@@ -874,7 +881,14 @@ private final class MacPDFReaderController: NSObject {
         pdfView.displayBox = .cropBox
         pdfView.displaysPageBreaks = true
         pdfView.pageBreakMargins = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
-        pdfView.autoScales = true
+        pdfView.autoScales = false
+        pdfView.scrollsOverflow = { [weak self] event in
+            guard let self, let size = self.spreadSize(), self.pdfView.scaleFactor > 0 else { return false }
+            let horizontal = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+            let extent = horizontal ? size.width : size.height
+            let available = horizontal ? self.pdfView.bounds.width : self.pdfView.bounds.height
+            return extent * self.pdfView.scaleFactor > available + 1
+        }
         pdfView.onDiscretePageTurn = { [weak self] direction in self?.turn(direction: direction) }
         pdfView.onAreaSelected = { [weak self] page, rect in self?.showAreaActions(page: page, rect: rect) }
         pdfView.onWordClicked = { [weak self] word, context in self?.onLookup?(word, context) }
@@ -931,6 +945,8 @@ private final class MacPDFReaderController: NSObject {
             stack.bottomAnchor.constraint(equalTo: actionBar.bottomAnchor),
         ])
 
+        pdfView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(viewportFrameChanged), name: NSView.frameDidChangeNotification, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(pageChanged(_:)), name: .PDFViewPageChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(selectionChanged(_:)), name: .PDFViewSelectionChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(scaleChanged(_:)), name: .PDFViewScaleChanged, object: pdfView)
@@ -945,18 +961,21 @@ private final class MacPDFReaderController: NSObject {
         if document.isLocked, let password, !password.isEmpty {
             _ = document.unlock(withPassword: password)
         }
+        suppressPositionEvents = true
+        defer { suppressPositionEvents = false }
+        fitMode = .height
+        pdfView.document = document
+        // PDFKit enables detection on the new document when it is attached.
+        pdfView.enableDataDetectors = false
         guard !document.isLocked else {
-            pdfView.document = document
             lastError = "PDF 需要密码"
             return false
         }
-        suppressPositionEvents = true
         self.pageMode = mode
         self.viewportWidth = max(320, viewportWidth)
-        pdfView.document = document
         applyPageMode()
         pdfView.goToFirstPage(nil)
-        pdfView.autoScales = true
+        applyFit()
         pendingTarget = nil
         actionBar.isHidden = true
         highlightIDsBySignature = [:]
@@ -964,7 +983,6 @@ private final class MacPDFReaderController: NSObject {
         annotationsByID = [:]
         audioNotesByAnnotationID = [:]
         lastError = ""
-        suppressPositionEvents = false
         return true
     }
 
@@ -977,7 +995,7 @@ private final class MacPDFReaderController: NSObject {
         suppressPositionEvents = true
         applyPageMode()
         pdfView.goToFirstPage(nil)
-        pdfView.autoScales = true
+        applyFit()
         suppressPositionEvents = false
         lastError = ""
         return true
@@ -995,10 +1013,47 @@ private final class MacPDFReaderController: NSObject {
     func updateViewport(width: CGFloat) {
         let wasDouble = effectiveDoublePage
         viewportWidth = max(320, width)
-        guard pageMode == .automatic, wasDouble != effectiveDoublePage else { return }
-        let index = currentPageIndex
-        applyPageMode()
-        goTo(pageIndex: index)
+        if pageMode == .automatic, wasDouble != effectiveDoublePage {
+            let index = currentPageIndex
+            applyPageMode()
+            goTo(pageIndex: index)
+        }
+        applyFit()
+    }
+
+    func setFitMode(_ mode: MacPDFFit) {
+        fitMode = mode
+        applyFit()
+        publishPosition()
+    }
+
+    private func spreadSize() -> CGSize? {
+        guard let doc = document, let page = pdfView.currentPage ?? doc.page(at: 0) else { return nil }
+        func size(_ page: PDFPage) -> CGSize {
+            let box = page.bounds(for: pdfView.displayBox).size
+            return page.rotation % 180 == 0 ? box : CGSize(width: box.height, height: box.width)
+        }
+        let index = doc.index(for: page)
+        let first = size(page)
+        guard effectiveDoublePage, index > 0 else { return first }
+        let adjacent = index % 2 == 0 ? index - 1 : index + 1
+        guard adjacent < doc.pageCount, let other = doc.page(at: adjacent) else { return first }
+        let second = size(other)
+        return CGSize(width: first.width + second.width, height: max(first.height, second.height))
+    }
+
+    private func applyFit() {
+        guard !applyingFit, let size = spreadSize(), size.width > 0, size.height > 0,
+              pdfView.bounds.width > 1, pdfView.bounds.height > 1 else { return }
+        applyingFit = true
+        defer { applyingFit = false }
+        let margins = pdfView.pageBreakMargins
+        let width = pdfView.bounds.width - (margins.left + margins.right) * (effectiveDoublePage ? 2 : 1)
+        let height = pdfView.bounds.height - margins.top - margins.bottom
+        let scale = fitMode == .height ? height / size.height : width / size.width
+        if scale > 0, abs(scale - pdfView.scaleFactor) > 0.0005 {
+            pdfView.scaleFactor = scale
+        }
     }
 
     private func applyPageMode() {
@@ -1018,7 +1073,7 @@ private final class MacPDFReaderController: NSObject {
         }
         pdfView.displaysAsBook = effectiveDoublePage
         pdfView.discretePagingEnabled = pageMode != .continuous
-        pdfView.autoScales = true
+        applyFit()
     }
 
     var currentPageIndex: Int {
@@ -1066,10 +1121,9 @@ private final class MacPDFReaderController: NSObject {
             applyPageMode()
         }
         goTo(pageIndex: pageIndex)
-        if let scale = (locator["scale_factor"] as? NSNumber)?.doubleValue, scale > 0 {
-            pdfView.autoScales = false
-            pdfView.scaleFactor = CGFloat(scale)
-        }
+        // Older locators store a pixel scale from the previous window size.
+        fitMode = (locator["fit_mode"] as? String).flatMap(MacPDFFit.init(rawValue:)) ?? .height
+        applyFit()
     }
 
     func positionLocator() -> [String: Any] {
@@ -1082,6 +1136,7 @@ private final class MacPDFReaderController: NSObject {
             "display_mode": pageMode.rawValue,
             "effective_double_page": effectiveDoublePage,
             "scale_factor": Double(pdfView.scaleFactor),
+            "fit_mode": fitMode.rawValue,
             "display_box": "cropBox",
         ]
     }
@@ -1553,7 +1608,12 @@ private final class MacPDFReaderController: NSObject {
         showActions(target)
     }
 
+    @objc private func viewportFrameChanged() {
+        updateViewport(width: pdfView.bounds.width)
+    }
+
     @objc private func pageChanged(_ notification: Notification) {
+        applyFit()
         dismissActions()
         publishPosition()
     }
@@ -17580,8 +17640,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     private var readerHeaderView: NSView?
     private var readerFooterView: NSView?
     private var readerChromeEventMonitor: Any?
-    private var readerChromeAutoHideWorkItem: DispatchWorkItem?
-    private var readerChromeVisible = false
     private var readerAPIAvailable = false
     private var readerAPILANModeEnabled = false
     private var readerBookID: String?
@@ -18345,13 +18403,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
     private func installReaderChromeMonitor() {
         readerChromeEventMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.mouseMoved, .keyDown, .leftMouseDown, .leftMouseDragged, .scrollWheel]
+            matching: [.keyDown, .leftMouseDown, .leftMouseDragged, .scrollWheel]
         ) { [weak self] event in
-            guard let self,
-                  let contentView = self.window.contentView
-            else {
-                return event
-            }
+            guard let self else { return event }
 
             if event.type == .keyDown,
                event.keyCode == 53,
@@ -18376,21 +18430,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
             if self.isPDFReadingMode, self.pdfReader.handlePageKey(event) { return nil }
 
-            if event.type == .mouseMoved {
-                let point = event.locationInWindow
-                let height = contentView.bounds.height
-                if point.y >= height - 54 || point.y <= 44 {
-                    self.revealReaderChromeTemporarily()
-                }
-                return event
-            }
-
-            if event.type == .keyDown,
-               event.keyCode == 53,
-               self.readerChromeVisible {
-                self.setReaderChromeVisible(false)
-                return nil
-            }
             return event
         }
     }
@@ -18403,34 +18442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         return true
     }
 
-    private func revealReaderChromeTemporarily() {
-        setReaderChromeVisible(true)
-        scheduleReaderChromeAutoHide()
-    }
-
-    private func scheduleReaderChromeAutoHide() {
-        readerChromeAutoHideWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in
-            guard let self,
-                  let contentView = self.window.contentView
-            else {
-                return
-            }
-
-            let point = self.window.mouseLocationOutsideOfEventStream
-            let height = contentView.bounds.height
-            if point.y >= height - 54 || point.y <= 44 {
-                self.scheduleReaderChromeAutoHide()
-                return
-            }
-            self.setReaderChromeVisible(false)
-        }
-        readerChromeAutoHideWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4, execute: item)
-    }
-
     private func setReaderChromeVisible(_ visible: Bool) {
-        readerChromeVisible = visible
         [readerHeaderView, readerFooterView].forEach { view in
             view?.isHidden = !visible
             view?.alphaValue = visible ? 1 : 0
@@ -18636,7 +18648,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         libraryHomeWebView?.isHidden = true
         mainTitlebarDragView?.isHidden = true
         window.title = "Click"
-        revealReaderChromeTemporarily()
+        setReaderChromeVisible(true)
     }
 
     private func revealMainLibraryAfterFailedOpen(from sourceWebView: WKWebView?) {
@@ -18913,7 +18925,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             self?.completePendingLibraryBookOpenIfReady()
         }
         comicReader.onChromeToggle = { [weak self] in
-            self?.revealReaderChromeTemporarily()
+            self?.setReaderChromeVisible(true)
         }
 
         pdfReader = MacPDFReaderController()
@@ -18948,7 +18960,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             self.pdfAreaButton.toolTip = label
         }
         pdfReader.onChromeToggle = { [weak self] in
-            self?.revealReaderChromeTemporarily()
+            self?.setReaderChromeVisible(true)
         }
         pdfReader.onStatus = { [weak self] text in
             self?.statusLabel.stringValue = text
@@ -19173,7 +19185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
 
         readerWebViewBottomConstraint = webView.bottomAnchor
             .constraint(
-                equalTo: root.bottomAnchor
+                equalTo: footer.topAnchor
             )
         let ttsPlayerMinimumWidthConstraint =
             ttsPlayer.widthAnchor.constraint(
@@ -19191,20 +19203,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             headerStack.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -14),
             headerStack.centerYAnchor.constraint(equalTo: header.centerYAnchor),
 
-            webView.topAnchor.constraint(equalTo: root.topAnchor),
+            webView.topAnchor.constraint(equalTo: header.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: notesRail.leadingAnchor),
             readerWebViewBottomConstraint!,
 
-            comicReader.webView.topAnchor.constraint(equalTo: root.topAnchor),
+            comicReader.webView.topAnchor.constraint(equalTo: header.bottomAnchor),
             comicReader.webView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             comicReader.webView.trailingAnchor.constraint(equalTo: notesRail.leadingAnchor),
-            comicReader.webView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            comicReader.webView.bottomAnchor.constraint(equalTo: footer.topAnchor),
 
-            pdfReader.view.topAnchor.constraint(equalTo: root.topAnchor),
+            pdfReader.view.topAnchor.constraint(equalTo: header.bottomAnchor),
             pdfReader.view.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             pdfReader.view.trailingAnchor.constraint(equalTo: notesRail.leadingAnchor),
-            pdfReader.view.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            pdfReader.view.bottomAnchor.constraint(equalTo: footer.topAnchor),
 
             notesRail.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 4),
             notesRail.trailingAnchor.constraint(equalTo: root.trailingAnchor),
@@ -19343,7 +19355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
         readingTTSPlayerView?.isHidden = !visible
         if visible,
            readingAudioSession.surfaceMode == .reading {
-            revealReaderChromeTemporarily()
+            setReaderChromeVisible(true)
         }
         if readingAudioSession.surfaceMode == .reading {
             window.contentView?.layoutSubtreeIfNeeded()
@@ -20873,6 +20885,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             addReaderSettingItem("固定双页", action: "pdfDouble", to: menu, isOn: mode == .double)
             addReaderSettingItem("连续滚动", action: "pdfContinuous", to: menu, isOn: mode == .continuous)
             menu.addItem(.separator())
+            addReaderSettingItem("适合高度", action: "pdfFitHeight", to: menu, isOn: pdfReader.fitMode == .height)
+            addReaderSettingItem("适合宽度", action: "pdfFitWidth", to: menu, isOn: pdfReader.fitMode == .width)
+            menu.addItem(.separator())
             addReaderSettingItem(
                 pdfReader.pdfView.areaSelectionMode ? "关闭区域批注" : "扫描页区域批注",
                 action: "pdfArea",
@@ -20924,7 +20939,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
     @objc private func togglePDFAreaSelection(_ sender: NSButton) {
         guard isPDFReadingMode else { return }
         pdfReader.setAreaSelectionMode(!pdfReader.pdfView.areaSelectionMode)
-        revealReaderChromeTemporarily()
+        setReaderChromeVisible(true)
     }
 
     private func addReaderSettingItem(_ title: String, action: String, to menu: NSMenu, isOn: Bool = false) {
@@ -20941,6 +20956,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKSc
             return
         }
         switch action {
+        case "pdfFitHeight":
+            pdfReader.setFitMode(.height)
+            return
+        case "pdfFitWidth":
+            pdfReader.setFitMode(.width)
+            return
         case "pdfAuto":
             savePDFPageMode(.automatic)
             return

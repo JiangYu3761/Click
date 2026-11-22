@@ -15,6 +15,7 @@ private func createPDF(at file: URL) {
         context.beginPDFPage(nil)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        ("Read 2:14 and the nearby words." as NSString).draw(at: NSPoint(x: 42, y: 380), withAttributes: style)
         for y in [24, 210, 560, 750] {
             ("The reader on page \(i) at \(y)." as NSString).draw(at: NSPoint(x: 42, y: y), withAttributes: style)
         }
@@ -72,6 +73,18 @@ private extension LocalReaderSpeech {
 }
 
 private extension AppDelegate {
+    func checkFixedHeader() {
+        buildWindow()
+        hideMainLibraryForReading()
+        window.contentView?.layoutSubtreeIfNeeded()
+        guard let header = readerHeaderView else { fatalError("missing reader toolbar") }
+        for content in [webView as NSView, pdfReader.view, comicReader.webView as NSView] {
+            check(!header.isHidden && content.frame.maxY <= header.frame.minY + 1, "toolbar overlays reader")
+        }
+        window.orderOut(nil)
+        print("Fixed toolbar reserves a separate row above PDF, EPUB and comic content")
+    }
+
     func checkWordSheet(on host: NSWindow) {
         window = host
         showLookupAlert(bookID: "fixture", word: "reader", sentence: "A reader.", sentenceIndex: "1", payload: nil)
@@ -161,6 +174,7 @@ private enum PDFInteractionRegression {
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try! FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temp) }
+        AppDelegate().checkFixedHeader()
         let file = temp.appendingPathComponent("sample.pdf")
         createPDF(at: file)
         let reader = MacPDFReaderController()
@@ -169,6 +183,33 @@ private enum PDFInteractionRegression {
         window.contentView = reader.view
         window.orderBack(nil)
         check(reader.load(url: file, mode: .single, viewportWidth: 900), "PDF load")
+        pump()
+        let pdf = reader.pdfView
+        check(!pdf.enableDataDetectors, "time detector re-enabled by document assignment")
+        let page = pdf.currentPage!
+        let aroundTime = "2:14 and the nearby words"
+        let selected = page.selection(for: (page.string! as NSString).range(of: aroundTime))!
+        pdf.setCurrentSelection(selected, animate: false)
+        check(pdf.currentSelection?.string == aroundTime, "time blocked text selection")
+        pdf.clearSelection()
+        reader.restore(locator: ["page_index": 0, "scale_factor": 0.12])
+        func assertFit(_ mode: MacPDFFit) {
+            let rect = pdf.convert(page.bounds(for: .cropBox), from: page)
+            let padding = pdf.pageBreakMargins
+            let error = mode == .height
+                ? rect.height + padding.top + padding.bottom - pdf.bounds.height
+                : rect.width + padding.left + padding.right - pdf.bounds.width
+            check(abs(error) < 2, "incorrect fit \(mode): \(error)")
+        }
+        assertFit(.height)
+        reader.setFitMode(.width)
+        assertFit(.width)
+        window.setContentSize(NSSize(width: 820, height: 640))
+        pump()
+        assertFit(.width)
+        reader.setFitMode(.height)
+        assertFit(.height)
+        print("Time and adjacent text selected; fit height, fit width, resize and legacy locator passed")
         check(window.makeFirstResponder(reader.pdfView), "PDF focus")
         func arrow(_ code: UInt16, _ flags: NSEvent.ModifierFlags = []) -> Bool {
             let text = code == 124 ? "\u{f703}" : "\u{f702}"
